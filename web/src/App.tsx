@@ -5,10 +5,13 @@ import type { Alarm } from './components/AlertBar'
 import { Step } from './components/basics'
 import { TopBar } from './components/TopBar'
 import type { Theme } from './components/TopBar'
+import { BACKEND } from './data/backend'
+import { follow } from './data/hosted'
 import { isFault, withFault } from './data/simulatedBuoy'
 import type { Fault } from './data/simulatedBuoy'
 import { createStore, useTelemetry } from './data/store'
 import type { Telemetry } from './data/store'
+import { supabaseTransport } from './data/supabase'
 import { parseSession } from './data/types'
 import sessionFile from './fixtures/session.json'
 import { ago, utcTime } from './lib/format'
@@ -38,15 +41,18 @@ const GUIDE: readonly { ask: string; look: string }[] = [
 const query = new URLSearchParams(window.location.search)
 /** `?still` shows the whole sample at once and holds it: used for screenshots and tests. */
 const STILL = query.has('still')
-const session = parseSession(sessionFile)
-const store = createStore(session, STILL ? session.reports.length : 60)
+/** `?sample` keeps to the sample built into the page and never asks the database: for a place without a network. */
+const SAMPLE_ONLY = STILL || query.has('sample')
+/** The sample built into the page. It is what the page shows until the database answers, and whenever it cannot. */
+const sample = parseSession(sessionFile)
+const store = createStore(sample, STILL ? sample.reports.length : 60)
 /** `?fault=water_temp` starts with a rehearsed fault; `?part=water_temp` opens that part's window on the Buoy view. */
 const askedFault = query.get('fault')
 const FIRST_FAULT: Fault = isFault(askedFault) ? askedFault : 'none'
-const FAULT_FROM = session.reports[STILL ? Math.max(0, session.reports.length - 9) : Math.min(61, session.reports.length - 1)]!.seq
+const FAULT_FROM = sample.reports[STILL ? Math.max(0, sample.reports.length - 9) : Math.min(61, sample.reports.length - 1)]!.seq
 const FIRST_PART = PARTS.find((part) => part.id === query.get('part'))?.id ?? null
 /** A held page with a silent buoy stands at this many seconds without a report: past the alarm. */
-const STILL_SILENCE_S = 4.5 * session.interval_s
+const STILL_SILENCE_S = 4.5 * sample.interval_s
 
 /** A fault switched on to see what the page does. Only simulated and replayed data can have one. */
 interface Rehearsal {
@@ -96,6 +102,24 @@ export default function App() {
 
   useEffect(() => (STILL ? undefined : store.play(2000)), [])
 
+  // Follow the project's database. Until it answers with a report the built-in sample goes on.
+  useEffect(() => {
+    if (SAMPLE_ONLY) return undefined
+    let stop = () => {}
+    let left = false
+    supabaseTransport(BACKEND)
+      .then((transport) => {
+        if (!left) stop = follow(store, transport)
+      })
+      .catch(() => {
+        // The part of the page that speaks to the database could not be loaded: the sample goes on.
+      })
+    return () => {
+      left = true
+      stop()
+    }
+  }, [])
+
   useEffect(() => {
     const onHash = () => setView(readView())
     window.addEventListener('hashchange', onHash)
@@ -131,29 +155,34 @@ export default function App() {
     const reports = telemetry.reports.map((report) => (report.seq >= from ? withFault(report, fault.kind) : report))
     return { ...telemetry, reports, latest: reports[reports.length - 1]! }
   }, [telemetry, fault])
-  const { latest } = shown
+  const { latest, session, cut } = shown
   const sinceHeard = STILL
     ? fault.kind === 'silent'
       ? STILL_SILENCE_S
-      : session.now - (latest.time ?? session.now)
+      : sample.now - (latest.time ?? sample.now)
     : Math.max(0, (now - shown.arrivedAt) / 1000)
   // The last report of a file is on the page and the sample is about to start again.
-  const ended = !STILL && session.source !== 'live' && fault.kind !== 'silent' && telemetry.complete
+  const ended = !STILL && session.feed !== 'hosted' && session.source !== 'live' && fault.kind !== 'silent' && telemetry.complete
   const planned = useMemo(() => VIEWS.find((item) => item.id === view)!, [view])
-  const troubled = assess(shown.reports.slice(-60), sinceHeard, session).filter(
+  const troubled = assess(shown.reports.slice(-60), sinceHeard, session, cut).filter(
     (item) => item.status === 'fail' || item.status === 'doubt',
   )
   const attention = { count: troubled.length, worst: troubled.some((item) => item.status === 'fail') ? ('fail' as const) : ('doubt' as const) }
   // Whatever is an alarm goes on the red bar, on every view. The words are fixed; the detail may count.
-  const alarms: Alarm[] = notices(shown.reports.slice(-60), sinceHeard, session.interval_s)
+  const alarms: Alarm[] = notices(shown.reports.slice(-60), sinceHeard, session.interval_s, cut)
     .filter((notice) => notice.tone === 'alarm')
     .map((notice) =>
-      notice.stale
+      notice.cut
         ? {
-            text: 'Nothing heard from the buoy.',
-            detail: `Its last report came ${ago(sinceHeard)}, at ${utcTime(latest.time)} UTC. Everything shown is that report.`,
+            text: 'No connection to the database.',
+            detail: `The page cannot tell what the buoy is doing. The last report it has came ${ago(sinceHeard)}, at ${utcTime(latest.time)} UTC.`,
           }
-        : { text: notice.text },
+        : notice.stale
+          ? {
+              text: 'Nothing heard from the buoy.',
+              detail: `Its last report came ${ago(sinceHeard)}, at ${utcTime(latest.time)} UTC. Everything shown is that report.`,
+            }
+          : { text: notice.text },
     )
 
   return (
@@ -167,6 +196,7 @@ export default function App() {
           latest={latest}
           sinceHeard={sinceHeard}
           ended={ended}
+          cut={cut}
           guide={guide && view === 'live'}
           guideOffered={view === 'live'}
           onGuide={() => setGuide(!guide)}

@@ -150,7 +150,7 @@ export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
   const aboveFreezing =
     latest.water_temp_c !== null && latest.freezing_point_c !== null ? latest.water_temp_c - latest.freezing_point_c : null
   const recent = reports.slice(-HISTORY)
-  const noticed = notices(recent, sinceHeard, session.interval_s)
+  const noticed = notices(recent, sinceHeard, session.interval_s, telemetry.cut)
   const marked = (place: string) => noticed.some((notice) => notice.place === place)
   const alarmed = noticed.some((notice) => notice.tone === 'alarm')
   const moved = drift(reports)
@@ -161,7 +161,7 @@ export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
   /** Nothing heard for three intervals: the page then holds the last report, and shows it as old. */
   const silent = sinceHeard > 3 * session.interval_s
   const happened = silent
-    ? [{ time: latest.time, text: 'Last report heard. Nothing since.' }, ...events(reports)].slice(0, 4)
+    ? [{ time: latest.time, text: telemetry.cut ? 'Last report before the connection was lost.' : 'Last report heard. Nothing since.' }, ...events(reports)].slice(0, 4)
     : events(reports)
 
   return (

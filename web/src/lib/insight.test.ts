@@ -42,6 +42,14 @@ describe('the headline', () => {
     expect(notices(recent, 7200, session.interval_s)[0]!.text).toBe('Nothing heard for 2 h.')
   })
 
+  it('does not blame the buoy when it is the page that lost its database', () => {
+    const found = notices(recent, 45, session.interval_s, true)
+    expect(found[0]).toMatchObject({ tone: 'alarm', place: 'link', cut: true })
+    expect(headline(latest, found)).toBe('No connection to the database; the last report came 45 s ago. Last known state NORMAL.')
+    // With reports still fresh, a hiccup of the connection is nobody's business.
+    expect(notices(recent, 4, session.interval_s, true).some((notice) => notice.tone === 'alarm')).toBe(false)
+  })
+
   it('speaks of ice when the water is at its freezing point', () => {
     const cold = { ...latest, water_temp_c: -1.6, freezing_point_c: -1.87 }
     const found = notices([cold], 4, session.interval_s)

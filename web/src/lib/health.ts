@@ -78,8 +78,9 @@ export type Link = Pick<Session, 'interval_s' | 'spreading_factor'>
 
 /** Judge every part from what the buoy has sent. These are the checks the shore can make by
  *  itself, on every report, with no question asked of the buoy. They say that a part reports
- *  and that its reading is believable; they cannot say that the reading is accurate. */
-export function assess(reports: readonly Report[], sinceHeardS: number, link: Link): PartHealth[] {
+ *  and that its reading is believable; they cannot say that the reading is accurate.
+ *  `cut` is true when the page cannot reach its database: then even the radio cannot be judged. */
+export function assess(reports: readonly Report[], sinceHeardS: number, link: Link, cut = false): PartHealth[] {
   const latest = reports[reports.length - 1]
   if (!latest) return []
   const intervalS = link.interval_s
@@ -97,7 +98,7 @@ export function assess(reports: readonly Report[], sinceHeardS: number, link: Li
         ['Not heard', `${lost} of the last ${reports.length + lost}`],
       ],
       checks: [
-        { label: `Heard within ${3 * intervalS} s`, passed: !silent, severity: 'fail' },
+        { label: `Heard within ${3 * intervalS} s`, passed: silent && cut ? null : !silent, severity: 'fail' },
         {
           label: `Signal above the radio\u2019s limit of ${fixed(snrLimit, 1)} dB at SF${link.spreading_factor}`,
           passed: judge(latest.snr_db, (snr) => snr > snrLimit),
@@ -194,7 +195,7 @@ export function assess(reports: readonly Report[], sinceHeardS: number, link: Li
     const status: Status =
       part.id === 'oxygen'
         ? 'absent'
-        : silent && part.id !== 'radio'
+        : silent && (part.id !== 'radio' || cut)
           ? 'silent'
           : failed.some((check) => check.severity === 'fail')
             ? 'fail'

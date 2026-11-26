@@ -56,7 +56,10 @@ export type Quantity = {
 }[keyof Report]
 
 export interface Session {
+  /** What the numbers are: measured by a buoy, made up, or a recording played again. */
   source: Source
+  /** How they reach the page: from a file built into it, or from the project's database as they arrive. */
+  feed?: 'file' | 'hosted'
   scenario: string
   note: string
   interval_s: number

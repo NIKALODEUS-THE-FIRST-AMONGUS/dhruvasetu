@@ -266,8 +266,8 @@ interface BuoyViewProps {
 }
 
 export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialPart }: BuoyViewProps) {
-  const { reports, latest, session } = telemetry
-  const health = assess(reports.slice(-60), sinceHeard, session)
+  const { reports, latest, session, cut } = telemetry
+  const health = assess(reports.slice(-60), sinceHeard, session, cut)
   /** Nothing heard for three intervals: what the page holds is the last report, and no question can be put. */
   const silent = sinceHeard > 3 * session.interval_s
   const [open, setOpen] = useState<PartId | null>(initialPart)
@@ -323,7 +323,7 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
               <h2 className="label">Buoy {latest.buoy_name}</h2>
               <p className="buoy__verdict" role="status">
                 {silent
-                  ? `Nothing heard for ${duration(sinceHeard)}. The parts cannot be judged until a report arrives.`
+                  ? `${cut ? 'No connection to the database' : `Nothing heard for ${duration(sinceHeard)}`}. The parts cannot be judged until a report arrives.`
                   : troubled.length === 0
                     ? `All ${fitted.length} fitted parts are working.`
                     : `${troubled.length} of ${fitted.length} fitted parts ${troubled.length === 1 ? 'needs' : 'need'} attention.`}
@@ -486,7 +486,11 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
                             <Badge status={status} />
                             {status !== 'absent' && (
                               <>
-                                {silent && <p className="part__stale">Nothing heard for {duration(sinceHeard)}. What follows is the last report.</p>}
+                                {silent && (
+                                <p className="part__stale">
+                                  {cut ? 'No connection to the database' : `Nothing heard for ${duration(sinceHeard)}`}. What follows is the last report.
+                                </p>
+                              )}
                                 <dl className="part__readings">
                                   {item.readings.map(([name, value]) => (
                                     <div key={name}>

@@ -41,6 +41,13 @@ describe('part health from the reports', () => {
     expect(status.oxygen).toBe('absent')
   })
 
+  it('judges not even the radio when it is the page that lost its database', () => {
+    const judged = assess(recent, 45, session, true)
+    expect(judged.find((item) => item.part.id === 'radio')).toMatchObject({ status: 'silent' })
+    expect(judged.find((item) => item.part.id === 'radio')!.checks[0]!.passed).toBeNull()
+    expect(judged.filter((item) => item.status === 'fail' || item.status === 'doubt')).toHaveLength(0)
+  })
+
   it('doubts a value that never changes', () => {
     const frozen = recent.map((report) => ({ ...report, water_temp_c: -1.2 }))
     expect(statusOf(frozen).water_temp).toBe('doubt')

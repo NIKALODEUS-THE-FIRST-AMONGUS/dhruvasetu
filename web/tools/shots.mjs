@@ -62,7 +62,8 @@ for (const [name, width, height, query] of shots) {
     if (message.type() === 'error') problems.push(`playing: console error: ${message.text()}`)
   })
   page.on('pageerror', (error) => problems.push(`playing: ${error.message}`))
-  await page.goto(base, { waitUntil: 'networkidle' })
+  // `?sample` keeps the page on its built-in sample: this check must not depend on the network or on the database.
+  await page.goto(base + '?sample', { waitUntil: 'networkidle' })
   const read = () => page.evaluate(() => [document.querySelector('.state__clock')?.textContent, document.querySelector('.tile__value span')?.textContent])
   const before = await read()
   await page.waitForTimeout(6500)
@@ -101,7 +102,7 @@ for (const [name, width, height, query] of shots) {
   })
   page.on('pageerror', (error) => problems.push(`long run: ${error.message}`))
   await page.clock.install()
-  await page.goto(base, { waitUntil: 'networkidle' })
+  await page.goto(base + '?sample', { waitUntil: 'networkidle' })
   const seen = []
   for (let step = 0; step < 30; step += 1) {
     await page.clock.runFor(10_000)

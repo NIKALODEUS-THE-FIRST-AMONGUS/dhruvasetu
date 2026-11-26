@@ -92,22 +92,27 @@ interface LinkStatusProps {
   sinceHeard: number
   /** True while a sample from a file rests on its last report before it starts again. */
   ended: boolean
+  /** True while the page cannot reach the database its reports come from. */
+  cut: boolean
   guide: boolean
 }
 
 /** Answers "is it alive?": where the numbers come from and when the buoy was last heard.
  *  It opens to the details of the link. */
-function LinkStatus({ session, latest, sinceHeard, ended, guide }: LinkStatusProps) {
+function LinkStatus({ session, latest, sinceHeard, ended, cut, guide }: LinkStatusProps) {
   const [open, setOpen] = useState(false)
   const silent = sinceHeard > 3 * session.interval_s
   const heard = ended
     ? `${session.source === 'replay' ? 'recording' : 'sample'} ended, starting again`
     : silent
-      ? `silent for ${duration(sinceHeard)}`
+      ? cut
+        ? 'no connection'
+        : `silent for ${duration(sinceHeard)}`
       : `heard ${ago(sinceHeard)}`
   const sent = session.received_total + session.lost_total
   const rows: [string, string][] = [
     ['Source', session.source === 'live' ? 'The shore receiver' : `${SOURCE_LABEL[session.source]}: ${session.scenario}`],
+    ['Comes from', session.feed === 'hosted' ? 'the project database, as it arrives' : 'a sample file inside the page'],
     ['Last report', `${thousands(latest.seq)} at ${utcTime(latest.time)} UTC`],
     ['A report every', `${session.interval_s} s`],
     ['Not heard', `${thousands(session.lost_total)} of ${thousands(sent)}`],
@@ -171,6 +176,7 @@ interface TopBarProps<View extends string> extends TabsProps<View> {
   latest: Report
   sinceHeard: number
   ended: boolean
+  cut: boolean
   guide: boolean
   /** False on views that have no guide: the button is then not offered. */
   guideOffered: boolean
@@ -181,7 +187,7 @@ interface TopBarProps<View extends string> extends TabsProps<View> {
 
 /** Title block of the page: the name, the views, the state of the link, guide and theme.
  *  It stays at the top while the page scrolls and gains a shadow once content passes under it. */
-export function TopBar<View extends string>({ session, latest, sinceHeard, ended, guide, guideOffered, onGuide, theme, onTheme, ...tabs }: TopBarProps<View>) {
+export function TopBar<View extends string>({ session, latest, sinceHeard, ended, cut, guide, guideOffered, onGuide, theme, onTheme, ...tabs }: TopBarProps<View>) {
   const [scrolled, setScrolled] = useState(false)
   const { scrollY } = useScroll()
   useMotionValueEvent(scrollY, 'change', (offset) => setScrolled(offset > 4))
@@ -203,7 +209,7 @@ export function TopBar<View extends string>({ session, latest, sinceHeard, ended
         </motion.div>
 
         <motion.div className="topbar__right" variants={enter}>
-          <LinkStatus session={session} latest={latest} sinceHeard={sinceHeard} ended={ended} guide={guide} />
+          <LinkStatus session={session} latest={latest} sinceHeard={sinceHeard} ended={ended} cut={cut} guide={guide} />
           {guideOffered && (
             <Tip label="How to read this page" keys="G">
               <motion.button className="ghost" type="button" aria-pressed={guide} onClick={onGuide} whileTap={{ scale: 0.95 }}>

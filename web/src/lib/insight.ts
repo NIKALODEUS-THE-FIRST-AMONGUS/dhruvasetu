@@ -1,5 +1,5 @@
 import type { Quantity, Report } from '../data/types'
-import { duration, fixed, gaps, trendPerHour } from './format'
+import { ago, duration, fixed, gaps, trendPerHour } from './format'
 
 /** Where on the page a notice points: a measurement tile, or a cell of the bottom line. */
 export type Place = Quantity | 'link' | 'hull'
@@ -10,6 +10,8 @@ export interface Notice {
   place: Place
   /** Set on the notice that the buoy is not heard: everything else on the page is then old. */
   stale?: true
+  /** Set when it is the page that has lost its database, which says nothing about the buoy. */
+  cut?: true
 }
 
 /** Sea state by significant wave height, WMO code table 3700 (the Douglas scale). */
@@ -49,13 +51,18 @@ export function trendText(reports: readonly Report[], key: Quantity, digits: num
 }
 
 /** Everything that deserves attention right now, most serious first.
- *  The headline says these in words and the page marks the place each one points to. */
-export function notices(reports: readonly Report[], sinceHeardS: number, intervalS: number): Notice[] {
+ *  The headline says these in words and the page marks the place each one points to.
+ *  `cut` is true when the page cannot reach its database: no report then means nothing about the buoy. */
+export function notices(reports: readonly Report[], sinceHeardS: number, intervalS: number, cut = false): Notice[] {
   const latest = reports[reports.length - 1]
   if (!latest) return []
   const found: Notice[] = []
   if (sinceHeardS > 3 * intervalS) {
-    found.push({ tone: 'alarm', text: `Nothing heard for ${duration(sinceHeardS)}.`, place: 'link', stale: true })
+    found.push(
+      cut
+        ? { tone: 'alarm', text: `No connection to the database; the last report came ${ago(sinceHeardS)}.`, place: 'link', stale: true, cut: true }
+        : { tone: 'alarm', text: `Nothing heard for ${duration(sinceHeardS)}.`, place: 'link', stale: true },
+    )
   }
   if (latest.leak) found.push({ tone: 'alarm', text: 'Water inside the hull.', place: 'hull' })
   if (latest.tag_ok === false) {
