@@ -78,7 +78,7 @@ def main() -> None:
     session = {
         "source": "simulated",
         "scenario": "Prydz Bay, Southern Ocean",
-        "note": "Made-up data from tools/make_fixture.py. Not a measurement.",
+        "note": "Simulated data. Not a measurement.",
         "interval_s": INTERVAL_S,
         "frame_bytes": frame.FRAME_BYTES,
         "airtime_ms": round(seawater.lora_airtime_ms(frame.FRAME_BYTES, SPREADING_FACTOR)),

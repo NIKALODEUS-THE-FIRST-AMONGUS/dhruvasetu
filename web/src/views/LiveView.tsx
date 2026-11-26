@@ -4,7 +4,7 @@ import { AnimatedNumber, Sparkline } from '../components/basics'
 import { BuoyScene } from '../components/BuoyScene'
 import { Chartlet } from '../components/Chartlet'
 import type { Telemetry } from '../data/store'
-import type { BuoyState, Report } from '../data/types'
+import type { BuoyState, Quantity, Report } from '../data/types'
 import { drift, fixed, gaps, latitude, longitude, series, signed, thousands, trendPerHour, utcDate, utcTime } from '../lib/format'
 
 const HISTORY = 60
@@ -15,6 +15,8 @@ const rise = {
 
 interface TileProps {
   label: string
+  /** A standing caveat on the measurement, shown beside its name. */
+  qualifier?: string
   value: number | null
   digits: number
   unit: string
@@ -25,11 +27,14 @@ interface TileProps {
   children?: ReactNode
 }
 
-function Tile({ label, value, digits, unit, history, minSpan, window, children }: TileProps) {
+function Tile({ label, qualifier, value, digits, unit, history, minSpan, window, children }: TileProps) {
   const format = (current: number | null) => fixed(current, digits)
   return (
     <motion.section className="tile" variants={rise} aria-label={label}>
-      <h2 className="label">{label}</h2>
+      <h2 className="label">
+        {label}
+        {qualifier && <span className="label__note"> · {qualifier}</span>}
+      </h2>
       <p className="tile__value">
         <AnimatedNumber value={value} format={format} />
         <span className="tile__unit">{unit}</span>
@@ -59,7 +64,9 @@ function NoiseTile({ report }: { report: Report }) {
   const zero = place(0)
   return (
     <motion.section className="tile" variants={rise} aria-label="Underwater noise">
-      <h2 className="label">Underwater noise</h2>
+      <h2 className="label">
+        Underwater noise<span className="label__note"> · relative</span>
+      </h2>
       <div className="bars">
         {bands.map(([band, level]) => (
           <div className="bar" key={band}>
@@ -81,7 +88,6 @@ function NoiseTile({ report }: { report: Report }) {
       </div>
       <div className="tile__sub" style={{ marginTop: 'auto' }}>
         <span>against the quiet baseline</span>
-        <span className="tag">relative</span>
       </div>
     </motion.section>
   )
@@ -97,34 +103,36 @@ function StateGlyph({ state }: { state: BuoyState }) {
   )
 }
 
-interface LogEntry {
+interface BuoyEvent {
   time: number | null
   text: string
-  warn?: boolean
 }
 
-function logEntries(reports: readonly Report[], latest: Report): LogEntry[] {
-  const entries: LogEntry[] = [{ time: latest.time, text: `Report ${thousands(latest.seq)} heard, SNR ${fixed(latest.snr_db, 1)} dB` }]
-  const pressure = trendPerHour(reports, 'air_pressure_hpa')
-  if (pressure !== null && pressure <= -1) {
-    entries.push({ time: latest.time, text: `Air pressure falling ${fixed(-pressure, 1)} hPa an hour`, warn: true })
-  }
-  for (const [first, last] of gaps(reports).slice(-2).reverse()) {
-    const after = reports.find((report) => report.seq === last + 1)
-    entries.push({
-      time: after?.time ?? null,
+/** Things that happened, newest first: reports not heard, a change of state, an alarm.
+ *  Current values are not events; they are on the page already. */
+function events(reports: readonly Report[]): BuoyEvent[] {
+  const found: BuoyEvent[] = []
+  for (const [first, last] of gaps(reports)) {
+    const next = reports.find((report) => report.seq === last + 1)
+    found.push({
+      time: next?.time ?? null,
       text: first === last ? `Report ${thousands(first)} not heard` : `Reports ${thousands(first)} to ${thousands(last)} not heard`,
-      warn: true,
     })
   }
-  entries.push({ time: reports[0]?.time ?? null, text: `State ${latest.state}; leak sensor ${latest.leak ? 'WET' : 'dry'}` })
-  return entries.slice(0, 4)
+  for (let index = 1; index < reports.length; index += 1) {
+    const before = reports[index - 1]!
+    const now = reports[index]!
+    if (now.state !== before.state) found.push({ time: now.time, text: `State changed from ${before.state} to ${now.state}` })
+    if (now.leak && !before.leak) found.push({ time: now.time, text: 'Leak sensor wet' })
+    if (now.low_battery && !before.low_battery) found.push({ time: now.time, text: 'Battery low' })
+  }
+  return found.sort((a, b) => (b.time ?? 0) - (a.time ?? 0)).slice(0, 4)
 }
 
 export function LiveView({ telemetry }: { telemetry: Telemetry }) {
   const { reports, latest, session } = telemetry
   const window = `${Math.round((Math.min(reports.length, HISTORY) * session.interval_s) / 60)} min`
-  const history = (key: Parameters<typeof series>[1]) => series(reports, key, HISTORY)
+  const history = (key: Quantity) => series(reports, key, HISTORY)
   const aboveFreezing =
     latest.water_temp_c !== null && latest.freezing_point_c !== null ? latest.water_temp_c - latest.freezing_point_c : null
   const pressureTrend = trendPerHour(reports.slice(-HISTORY), 'air_pressure_hpa')
@@ -133,6 +141,7 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
   const smallWaves = latest.wave_hs_m !== null && latest.wave_hs_m < 0.995
   const waveFactor = smallWaves ? 100 : 1
   const sent = session.received_total + session.lost_total
+  const happened = events(reports)
 
   return (
     <div className="live">
@@ -142,7 +151,7 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
           <span className="state__word">{latest.state}</span>
         </div>
         <div className="fact">
-          <span className="label">Water above its freezing point</span>
+          <span className="label">Water above freezing</span>
           <span className="fact__value">{fixed(aboveFreezing, 2)} °C</span>
         </div>
         <div className="fact">
@@ -150,10 +159,8 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
           <span className="fact__value">{fixed(latest.wave_hs_m, 2)} m</span>
         </div>
         <div className="fact">
-          <span className="label">Freeze-in window</span>
-          <span className="fact__value">
-            {fixed(latest.ice_timer_pct, 0)} % {latest.bench_timing && <span className="tag">bench timing</span>}
-          </span>
+          <span className="label">Ice window held{latest.bench_timing ? ' · bench timing' : ''}</span>
+          <span className="fact__value">{fixed(latest.ice_timer_pct, 0)} %</span>
         </div>
         <div className="fact">
           <span className="label">Leak sensor</span>
@@ -162,21 +169,32 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
           </span>
         </div>
         <div className="state__clock mono">
-          <div>
-            {utcDate(latest.time)} · {utcTime(latest.time)} UTC
-          </div>
-          <div>report {thousands(latest.seq)}</div>
+          {utcDate(latest.time)} · {utcTime(latest.time)} UTC
         </div>
       </section>
 
       <div className="board">
         <motion.div className="tiles" initial="hidden" animate="shown" transition={{ staggerChildren: 0.05 }}>
-          <Tile label="Sea-surface temperature" value={latest.water_temp_c} digits={1} unit="°C" history={history('water_temp_c')} minSpan={0.2} window={window}>
-            <span>{fixed(aboveFreezing, 2)} °C above freezing</span>
-          </Tile>
-          <Tile label="Conductivity" value={latest.conductivity_ms_cm} digits={1} unit="mS/cm" history={history('conductivity_ms_cm')} minSpan={0.3} window={window}>
+          <Tile
+            label="Sea-surface temperature"
+            value={latest.water_temp_c}
+            digits={1}
+            unit="°C"
+            history={history('water_temp_c')}
+            minSpan={0.2}
+            window={window}
+          />
+          <Tile
+            label="Conductivity"
+            qualifier="indicative"
+            value={latest.conductivity_ms_cm}
+            digits={1}
+            unit="mS/cm"
+            history={history('conductivity_ms_cm')}
+            minSpan={0.3}
+            window={window}
+          >
             <span>salinity {fixed(latest.salinity, 1)}</span>
-            <span className="tag">indicative</span>
           </Tile>
           <Tile
             label="Significant wave height"
@@ -199,15 +217,13 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
               </span>
             )}
           </Tile>
-          <Tile label="Air temperature" value={latest.air_temp_c} digits={1} unit="°C" history={history('air_temp_c')} minSpan={1} window={window}>
-            <span>inside the hull {fixed(latest.hull_temp_c, 0)} °C</span>
-          </Tile>
+          <Tile label="Air temperature" value={latest.air_temp_c} digits={1} unit="°C" history={history('air_temp_c')} minSpan={1} window={window} />
           <Tile label="Relative humidity" value={latest.humidity_pct} digits={0} unit="%" history={history('humidity_pct')} minSpan={6} window={window} />
           <motion.section className="tile tile--absent" variants={rise} aria-label="Dissolved oxygen">
             <h2 className="label">Dissolved oxygen</h2>
             <p className="tile__value">Not fitted</p>
             <div className="tile__sub">
-              <span>A costed option. One port of the sensor plate is kept blanked for the probe.</span>
+              <span>A costed option. Its port is blanked.</span>
             </div>
           </motion.section>
         </motion.div>
@@ -243,21 +259,22 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
             <Chartlet drift={moved} originLat={firstFix?.lat ?? null} originLon={firstFix?.lon ?? null} waterName={session.scenario.split(',')[0] ?? ''} />
           </div>
           <div className="panel events">
-            <h2 className="label">Log</h2>
+            <h2 className="label">Events</h2>
+            {happened.length === 0 && <p className="events__none">None in this session.</p>}
             <ol className="events__list">
               <AnimatePresence initial={false}>
-                {logEntries(reports, latest).map((entry) => (
+                {happened.map((event) => (
                   <motion.li
-                    key={entry.text.replace(/\d[\d,.]*/g, '#')}
-                    className={entry.warn ? 'event event--warn' : 'event'}
+                    key={event.text}
+                    className="event"
                     layout
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <span className="event__time mono">{utcTime(entry.time)}</span>
-                    <span className="event__text">{entry.text}</span>
+                    <span className="event__time mono">{utcTime(event.time)}</span>
+                    <span className="event__text">{event.text}</span>
                   </motion.li>
                 ))}
               </AnimatePresence>
@@ -271,26 +288,21 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
           <span className="label">Battery</span>
           <strong>{fixed(latest.battery_v, 2)} V</strong>
           <span>{fixed(latest.energy_j, 2)} J a report</span>
+          <span>{fixed(latest.hull_temp_c, 0)} °C inside the hull</span>
         </div>
         <div className="strip__cell">
           <span className="label">Link</span>
           <strong>{fixed(latest.rssi_dbm, 0)} dBm</strong>
           <span>SNR {fixed(latest.snr_db, 1)} dB</span>
           <span>
-            {thousands(session.lost_total)} of {thousands(sent)} not heard ({fixed((100 * session.lost_total) / sent, 1)} %)
+            {thousands(session.lost_total)} of {thousands(sent)} reports not heard
           </span>
         </div>
         <div className="strip__cell">
-          <span className="label">Last report</span>
-          <strong>{session.frame_bytes} bytes</strong>
-          <span>
-            {session.airtime_ms} ms on air at SF{session.spreading_factor}
-          </span>
-          <span>short enough for one satellite message</span>
-          <span className="hex mono" title="The report as sent. The last 8 bytes are its authentication tag.">
-            <span className="hex__payload">{latest.raw.slice(0, -16)}</span>
-            <b>{latest.raw.slice(-16)}</b>
-          </span>
+          <span className="label">Report</span>
+          <strong>{thousands(latest.seq)}</strong>
+          <span>{session.frame_bytes} bytes</span>
+          {latest.tag_ok === false ? <span style={{ color: 'var(--alarm)' }}>tag does not match</span> : latest.tag_ok && <span>tag checked</span>}
         </div>
       </footer>
     </div>

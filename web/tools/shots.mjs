@@ -6,7 +6,7 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
 import { preview } from 'vite'
 
-const PORT = 4173
+const PORT = 4199 // not 4173: start.cmd may be serving the page there
 const base = `http://localhost:${PORT}/`
 const shots = [
   ['live-laptop-light', 1536, 864, '?still'],

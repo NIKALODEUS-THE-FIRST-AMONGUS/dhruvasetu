@@ -8,7 +8,7 @@
   --font-serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
 
   --value-size: clamp(2.4rem, 3.25vw, 4.2rem);
-  --gap: 1.15rem;
+  --pad: 1.25rem;
   --ease: cubic-bezier(0.22, 0.8, 0.26, 1);
 
   color-scheme: light;
@@ -126,11 +126,6 @@ button {
   white-space: nowrap;
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+.label__note {
+  color: var(--amber);
 }
