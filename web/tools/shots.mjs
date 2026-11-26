@@ -74,7 +74,7 @@ for (const [name, width, height, query] of shots) {
   await page.locator('.section .dot[aria-label^="Motion"]').click()
   await page.getByRole('button', { name: 'Check status' }).click()
   await page.waitForTimeout(3200)
-  const answer = await page.locator('.window__test').textContent()
+  const answer = await page.locator('.part__test').textContent()
   if (!answer?.includes('MPU6050')) problems.push(`playing: no self-test answer, got: ${answer}`)
   console.log('self-test', JSON.stringify(answer))
   await page.goto(base + '?still&theme=light&fault=water_temp', { waitUntil: 'networkidle' })

@@ -1,10 +1,14 @@
+import * as Popover from '@radix-ui/react-popover'
+import * as Select from '@radix-ui/react-select'
+import * as ToggleGroup from '@radix-ui/react-toggle-group'
+import * as Tooltip from '@radix-ui/react-tooltip'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { FAULTS, selfTest } from '../data/simulatedBuoy'
 import type { Fault, SelfTest } from '../data/simulatedBuoy'
 import type { Telemetry } from '../data/store'
 import { thousands } from '../lib/format'
-import { PARTS, STATUS_WORD, assess } from '../lib/health'
+import { STATUS_WORD, assess } from '../lib/health'
 import type { PartHealth, PartId, Status } from '../lib/health'
 
 /** The section is drawn in millimetres: x from the axis, z above the keel plate. */
@@ -15,6 +19,7 @@ const HEIGHT = 570
 const WATERLINE = 177
 const across = (x: number) => ((x - LEFT) / WIDTH) * 100
 const down = (z: number) => ((TOP - z) / HEIGHT) * 100
+const spring = { type: 'spring', stiffness: 460, damping: 34 } as const
 
 const mirror = (half: readonly (readonly [number, number])[]) =>
   [...half, ...[...half].reverse().map(([r, z]) => [-r, z] as const)].map(([r, z]) => `${r},${-z}`).join(' ')
@@ -76,6 +81,57 @@ function StatusMark({ status }: { status: Status }) {
   )
 }
 
+/** The state of a part as a word in its colour. */
+function Badge({ status }: { status: Status }) {
+  return (
+    <span className="badge" data-status={status}>
+      <StatusMark status={status} />
+      {STATUS_WORD[status]}
+    </span>
+  )
+}
+
+const RING_RADIUS = 34
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS
+const RING_ORDER = ['ok', 'doubt', 'fail', 'silent'] as const
+
+/** How many fitted parts are in each state, as one ring. */
+function HealthRing({ states }: { states: readonly Status[] }) {
+  const lengths = RING_ORDER.map((status) =>
+    states.length ? (states.filter((state) => state === status).length / states.length) * RING_LENGTH : 0,
+  )
+  const arcs = RING_ORDER.map((status, index) => ({
+    status,
+    length: lengths[index]!,
+    start: lengths.slice(0, index).reduce((sum, length) => sum + length, 0),
+  }))
+  return (
+    <svg className="ring" viewBox="0 0 88 88" role="img" aria-label={`${states.filter((state) => state === 'ok').length} of ${states.length} fitted parts working`}>
+      <circle className="ring__track" cx="44" cy="44" r={RING_RADIUS} />
+      {arcs.map((arc) => (
+        <motion.circle
+          key={arc.status}
+          className="ring__arc"
+          data-status={arc.status}
+          cx="44"
+          cy="44"
+          r={RING_RADIUS}
+          transform="rotate(-90 44 44)"
+          initial={false}
+          animate={{ strokeDasharray: `${arc.length} ${RING_LENGTH - arc.length}`, strokeDashoffset: -arc.start }}
+          transition={{ type: 'spring', stiffness: 120, damping: 22 }}
+        />
+      ))}
+      <text className="ring__count" x="44" y="45">
+        {states.filter((state) => state === 'ok').length}
+      </text>
+      <text className="ring__of" x="44" y="58">
+        of {states.length}
+      </text>
+    </svg>
+  )
+}
+
 interface Answer extends SelfTest {
   /** The report the answer came with. */
   seq: number
@@ -96,6 +152,7 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
   const { reports, latest, session } = telemetry
   const health = assess(reports.slice(-60), sinceHeard, session.interval_s)
   const [open, setOpen] = useState<PartId | null>(initialPart)
+  const [shown, setShown] = useState<'all' | 'attention'>('all')
   const [asked, setAsked] = useState<ReadonlyMap<PartId, number>>(new Map())
   const [answers, setAnswers] = useState<ReadonlyMap<PartId, Answer>>(new Map())
   const simulated = session.source !== 'live'
@@ -112,175 +169,248 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
     return () => window.clearTimeout(timer)
   }, [asked, latest, held, fault])
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
   const ask = (parts: readonly PartId[]) => setAsked((before) => new Map([...before, ...parts.map((part) => [part, latest.seq] as const)]))
-  const fitted = health.filter((item) => item.status !== 'absent')
   const worst = (item: PartHealth): Status => (item.status === 'ok' && answers.get(item.part.id)?.passed === false ? 'fail' : item.status)
+  const fitted = health.filter((item) => item.status !== 'absent')
   const troubled = fitted.filter((item) => worst(item) !== 'ok')
   const tested = fitted.filter((item) => answers.has(item.part.id))
-  const selected = health.find((item) => item.part.id === open)
+  const listed = shown === 'attention' ? troubled : health
 
   return (
-    <div className="buoy">
-      <section className="buoy__brief" aria-label="Summary">
-        <h2 className="label">Buoy {latest.buoy_name}</h2>
-        <p className="buoy__verdict" role="status">
-          {troubled.length === 0
-            ? `All ${fitted.length} fitted parts are working.`
-            : `${troubled.length} of ${fitted.length} fitted parts ${troubled.length === 1 ? 'needs' : 'need'} attention: ${troubled.map((item) => item.part.name.toLowerCase()).join(', ')}.`}
-        </p>
-        <p className="buoy__text">
-          Each dot is judged again on every report, from what the buoy sent. Nothing needs clicking. "Check status" asks the buoy to
-          test the part itself; its answer comes with the next report.
-        </p>
-        <button className="chip chip--strong" type="button" onClick={() => ask(fitted.map((item) => item.part.id))} disabled={asked.size > 0}>
-          {asked.size > 0 ? 'Asking the buoy\u2026' : 'Check all parts'}
-        </button>
-        <p className="buoy__text" role="status">
-          {tested.length === 0
-            ? 'No self-test asked yet.'
-            : `Self-test: ${tested.filter((item) => answers.get(item.part.id)!.passed).length} of ${tested.length} passed, with report ${thousands(Math.max(...tested.map((item) => answers.get(item.part.id)!.seq)))}.`}
-        </p>
-        <ul className="legend">
-          {(['ok', 'doubt', 'fail', 'silent', 'absent'] as const).map((status) => (
-            <li key={status}>
-              <span className="dot dot--legend" data-status={status}>
-                <StatusMark status={status} />
-              </span>
-              {STATUS_WORD[status]}
-            </li>
-          ))}
-        </ul>
-        <p className="buoy__text">
-          Green means the part reports, its reading is believable and it passed its own test. It does not mean the reading is
-          accurate; that takes a calibration.
-        </p>
-        {simulated && (
-          <label className="rehearse">
-            <span className="label">Rehearse a fault</span>
-            <select value={fault} onChange={(event) => onFault(event.target.value as Fault)}>
-              {FAULTS.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </section>
+    <Tooltip.Provider delayDuration={250} skipDelayDuration={150}>
+      <div className="buoy">
+        <aside className="buoy__brief" aria-label="Summary">
+          <div className="card summary">
+            <HealthRing states={fitted.map(worst)} />
+            <div>
+              <h2 className="label">Buoy {latest.buoy_name}</h2>
+              <p className="buoy__verdict" role="status">
+                {troubled.length === 0
+                  ? `All ${fitted.length} fitted parts are working.`
+                  : `${troubled.length} of ${fitted.length} fitted parts ${troubled.length === 1 ? 'needs' : 'need'} attention.`}
+              </p>
+            </div>
+          </div>
 
-      <div className="section">
-        <Section />
-        {health.map((item) => (
-          <button
-            key={item.part.id}
-            type="button"
-            className="dot"
-            data-status={worst(item)}
-            data-asked={asked.has(item.part.id) || undefined}
-            style={{ left: `${across(item.part.x)}%`, top: `${down(item.part.z)}%` }}
-            aria-label={`${item.part.name}: ${STATUS_WORD[worst(item)]}`}
-            title={item.part.name}
-            aria-expanded={open === item.part.id}
-            onClick={() => setOpen(open === item.part.id ? null : item.part.id)}
-          >
-            <StatusMark status={worst(item)} />
-          </button>
-        ))}
-        <AnimatePresence>
-          {selected && (
-            <motion.div
-              key={selected.part.id}
-              className="window"
-              role="dialog"
-              aria-label={selected.part.name}
-              style={{
-                top: `${Math.min(Math.max(down(selected.part.z) - 20, 0), 44)}%`,
-                ...(selected.part.x >= 0
-                  ? { left: `calc(${across(selected.part.x)}% + 1.3rem)` }
-                  : { right: `calc(${100 - across(selected.part.x)}% + 1.3rem)` }),
-              }}
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.16 }}
-            >
-              <header className="window__head">
-                <span className="dot dot--legend" data-status={worst(selected)}>
-                  <StatusMark status={worst(selected)} />
-                </span>
-                <div>
-                  <h3>{selected.part.name}</h3>
-                  <p>{STATUS_WORD[worst(selected)]}</p>
-                </div>
-                <button type="button" className="window__close" onClick={() => setOpen(null)} aria-label="Close">
-                  ×
-                </button>
-              </header>
-              <p className="window__what">{selected.part.what}</p>
-              {selected.status !== 'absent' && (
-                <>
-                  <dl className="window__readings">
-                    {selected.readings.map(([name, value]) => (
-                      <div key={name}>
-                        <dt>{name}</dt>
-                        <dd className="mono">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <h4 className="label">Checked on every report</h4>
-                  <ul className="window__checks">
-                    {selected.checks.map((check) => (
-                      <li key={check.label} data-passed={check.passed}>
-                        {check.label}
-                      </li>
-                    ))}
-                  </ul>
-                  <h4 className="label">The buoy's own test</h4>
-                  <p className="window__test" data-passed={answers.get(selected.part.id)?.passed}>
-                    {asked.has(selected.part.id)
-                      ? 'Asked. The answer comes with the next report.'
-                      : answers.has(selected.part.id)
-                        ? `${answers.get(selected.part.id)!.detail} With report ${thousands(answers.get(selected.part.id)!.seq)}.`
-                        : 'Not asked yet.'}
-                    {simulated && answers.has(selected.part.id) && !asked.has(selected.part.id) && <span> Answer of the simulated buoy.</span>}
-                  </p>
-                  <button className="chip" type="button" onClick={() => ask([selected.part.id])} disabled={asked.has(selected.part.id)}>
-                    {asked.has(selected.part.id) ? 'Asking\u2026' : 'Check status'}
-                  </button>
-                </>
+          <div className="buoy__actions">
+            <motion.button className="button" type="button" whileTap={{ scale: 0.97 }} onClick={() => ask(fitted.map((item) => item.part.id))} disabled={asked.size > 0}>
+              {asked.size > 0 && (
+                <motion.svg className="button__spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.9, ease: 'linear' }} aria-hidden="true">
+                  <path d="M8 2 a6 6 0 1 1 -6 6" />
+                </motion.svg>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              {asked.size > 0 ? 'Asking the buoy' : 'Check all parts'}
+            </motion.button>
+            <p className="buoy__text" role="status">
+              {tested.length === 0
+                ? 'No self-test asked yet.'
+                : `Self-test: ${tested.filter((item) => answers.get(item.part.id)!.passed).length} of ${tested.length} passed, with report ${thousands(Math.max(...tested.map((item) => answers.get(item.part.id)!.seq)))}.`}
+            </p>
+          </div>
 
-      <section className="parts" aria-label="Parts">
-        <h2 className="label">Parts, top to bottom</h2>
-        <ul>
-          {PARTS.map((part) => {
-            const item = health.find((entry) => entry.part.id === part.id)!
+          <div className="card note">
+            <h3 className="label">How to read the dots</h3>
+            <p>
+              Every dot is judged again on each report, with no clicking. "Check status" asks the buoy to test the part itself; the
+              answer comes with its next report.
+            </p>
+            <p>
+              Green means the part reports, its reading is believable and it passed its own test. It does not mean the reading is
+              accurate; that takes a calibration.
+            </p>
+            <ul className="legend">
+              {(['ok', 'doubt', 'fail', 'silent', 'absent'] as const).map((status) => (
+                <li key={status}>
+                  <Badge status={status} />
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {simulated && (
+            <div className="rehearse">
+              <span className="label" id="rehearse-label">
+                Rehearse a fault
+              </span>
+              <Select.Root value={fault} onValueChange={(value) => onFault(value as Fault)}>
+                <Select.Trigger className="select" aria-labelledby="rehearse-label">
+                  <Select.Value />
+                  <Select.Icon>
+                    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                      <path d="M2.5 4.5 L6 8 L9.5 4.5" />
+                    </svg>
+                  </Select.Icon>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content className="pop select__list" position="popper" sideOffset={6}>
+                    <Select.Viewport>
+                      {FAULTS.map((item) => (
+                        <Select.Item key={item.id} value={item.id} className="select__item">
+                          <Select.ItemText>{item.label}</Select.ItemText>
+                          <Select.ItemIndicator>
+                            <StatusMark status="ok" />
+                          </Select.ItemIndicator>
+                        </Select.Item>
+                      ))}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
+            </div>
+          )}
+        </aside>
+
+        <div className="section">
+          <Section />
+          {health.map((item) => {
+            const status = worst(item)
+            const isOpen = open === item.part.id
+            const answer = answers.get(item.part.id)
+            const waiting = asked.has(item.part.id)
             return (
-              <li key={part.id}>
-                <button type="button" className="parts__row" aria-pressed={open === part.id} onClick={() => setOpen(open === part.id ? null : part.id)}>
-                  <span className="dot dot--legend" data-status={worst(item)}>
-                    <StatusMark status={worst(item)} />
-                  </span>
-                  <span className="parts__name">{part.name}</span>
-                  <span className="parts__value mono">{item.summary}</span>
-                </button>
-              </li>
+              <Popover.Root key={item.part.id} open={isOpen} onOpenChange={(next) => setOpen(next ? item.part.id : null)}>
+                <span className="spot" style={{ left: `${across(item.part.x)}%`, top: `${down(item.part.z)}%` }}>
+                  {(status === 'fail' || status === 'doubt') && (
+                    <motion.span
+                      className="spot__pulse"
+                      data-status={status}
+                      animate={{ scale: [1, 2.1], opacity: [0.55, 0] }}
+                      transition={{ repeat: Infinity, duration: 1.6, ease: 'easeOut' }}
+                    />
+                  )}
+                  <Tooltip.Root>
+                    <Tooltip.Trigger asChild>
+                      <Popover.Trigger asChild>
+                        <motion.button
+                          type="button"
+                          className="dot"
+                          data-status={status}
+                          data-asked={waiting || undefined}
+                          aria-label={`${item.part.name}: ${STATUS_WORD[status]}`}
+                          whileHover={{ scale: 1.15 }}
+                          whileTap={{ scale: 0.92 }}
+                          transition={spring}
+                        >
+                          <StatusMark status={status} />
+                        </motion.button>
+                      </Popover.Trigger>
+                    </Tooltip.Trigger>
+                    {!isOpen && (
+                      <Tooltip.Portal>
+                        <Tooltip.Content className="tip" sideOffset={8}>
+                          {item.part.name}
+                        </Tooltip.Content>
+                      </Tooltip.Portal>
+                    )}
+                  </Tooltip.Root>
+                </span>
+                <AnimatePresence>
+                  {isOpen && (
+                    <Popover.Portal forceMount>
+                      <Popover.Content
+                        asChild
+                        forceMount
+                        side={item.part.x >= 0 ? 'right' : 'left'}
+                        sideOffset={14}
+                        collisionPadding={12}
+                        onOpenAutoFocus={(event) => event.preventDefault()}
+                      >
+                        <motion.div
+                          className="pop part"
+                          initial={{ opacity: 0, scale: 0.94 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.12 } }}
+                          transition={spring}
+                        >
+                          <header className="part__head">
+                            <div>
+                              <h3>{item.part.name}</h3>
+                              <p>{item.part.what}</p>
+                            </div>
+                            <Popover.Close className="part__close" aria-label="Close">
+                              ×
+                            </Popover.Close>
+                          </header>
+                          <Badge status={status} />
+                          {status !== 'absent' && (
+                            <>
+                              <dl className="part__readings">
+                                {item.readings.map(([name, value]) => (
+                                  <div key={name}>
+                                    <dt>{name}</dt>
+                                    <dd className="mono">{value}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                              <h4 className="label">Checked on every report</h4>
+                              <ul className="part__checks">
+                                {item.checks.map((check) => (
+                                  <li key={check.label} data-passed={check.passed}>
+                                    {check.label}
+                                  </li>
+                                ))}
+                              </ul>
+                              <h4 className="label">The buoy's own test</h4>
+                              <p className="part__test" data-passed={answer?.passed}>
+                                {waiting
+                                  ? 'Asked. The answer comes with the next report.'
+                                  : answer
+                                    ? `${answer.detail} With report ${thousands(answer.seq)}.`
+                                    : 'Not asked yet.'}
+                                {simulated && answer && !waiting && <span> Answer of the simulated buoy.</span>}
+                              </p>
+                              <motion.button className="button button--quiet" type="button" whileTap={{ scale: 0.97 }} onClick={() => ask([item.part.id])} disabled={waiting}>
+                                {waiting ? 'Asking' : 'Check status'}
+                              </motion.button>
+                            </>
+                          )}
+                          <Popover.Arrow className="pop__arrow" width={14} height={7} />
+                        </motion.div>
+                      </Popover.Content>
+                    </Popover.Portal>
+                  )}
+                </AnimatePresence>
+              </Popover.Root>
             )
           })}
-        </ul>
-      </section>
-    </div>
+        </div>
+
+        <section className="parts" aria-label="Parts">
+          <div className="parts__head">
+            <h2 className="label">Parts</h2>
+            <ToggleGroup.Root className="seg" type="single" value={shown} onValueChange={(value) => value && setShown(value as 'all' | 'attention')} aria-label="Which parts to list">
+              <ToggleGroup.Item className="seg__item" value="all">
+                All <span>{health.length}</span>
+              </ToggleGroup.Item>
+              <ToggleGroup.Item className="seg__item" value="attention">
+                Attention <span data-some={troubled.length > 0 || undefined}>{troubled.length}</span>
+              </ToggleGroup.Item>
+            </ToggleGroup.Root>
+          </div>
+          <ul className="parts__list">
+            <AnimatePresence initial={false} mode="popLayout">
+              {listed.map((item) => (
+                <motion.li key={item.part.id} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={spring}>
+                  <button type="button" className="parts__row" data-open={open === item.part.id || undefined} onClick={() => setOpen(item.part.id)}>
+                    <span className="dot dot--small" data-status={worst(item)}>
+                      <StatusMark status={worst(item)} />
+                    </span>
+                    <span className="parts__name">{item.part.name}</span>
+                    {worst(item) === 'ok' || worst(item) === 'absent' ? (
+                      <span className="parts__value mono">{item.summary}</span>
+                    ) : (
+                      <span className="parts__value">
+                        <Badge status={worst(item)} />
+                      </span>
+                    )}
+                  </button>
+                </motion.li>
+              ))}
+            </AnimatePresence>
+          </ul>
+          {listed.length === 0 && <p className="parts__none">Nothing needs attention.</p>}
+        </section>
+      </div>
+    </Tooltip.Provider>
   )
 }

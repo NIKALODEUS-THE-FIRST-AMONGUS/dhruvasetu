@@ -11,10 +11,10 @@ const SCALE = 0.33 // pixels per millimetre of hull
 const WATERLINE = 177 // mm above the keel plate: 10 mm below the ice belt, the tank target
 
 /** Outline of hull H3, right half, as (radius, height) in millimetres from the Fusion
- *  model's parameters: keel can 220 x 80, 25 degree ice cone, belt 320 x 55, lid rising 90. */
+ *  model's parameters: keel can 220 x 80, 25 degree ice cone, belt 320 x 55, lid rising 90.
+ *  The can and cone are joined by flanges that turn inward, so the outside has no step. */
 const HALF_PROFILE: readonly (readonly [number, number])[] = [
-  [104, 0], [110, 6], [110, 68], [132, 68], [132, 90], [114.7, 90],
-  [160, 187.2], [160, 248.2], [146, 248.2], [60, 338.2],
+  [104, 0], [110, 6], [110, 80], [160, 187.2], [160, 248.2], [146, 248.2], [60, 338.2],
 ]
 const at = (radius: number, height: number) => `${(radius * SCALE).toFixed(1)} ${((WATERLINE - height) * SCALE).toFixed(1)}`
 const HULL = `M${[...HALF_PROFILE.map(([r, z]) => at(r, z)), ...[...HALF_PROFILE].reverse().map(([r, z]) => at(-r, z))].join(' L')} Z`
@@ -108,7 +108,7 @@ export function BuoyScene({ waveHeightM, wavePeriodS, tiltDeg, state, pulse }: B
         <rect className="scene__metal" x={-100 * SCALE} y={level(-35)} width={200 * SCALE} height={18 * SCALE} />
         <path className="scene__hull" d={HULL} />
         <rect className="scene__belt" x={-160 * SCALE} y={level(242.2)} width={320 * SCALE} height={55 * SCALE} />
-        <line className="scene__mast" style={{ strokeWidth: 0.8 }} x1={-132 * SCALE} y1={level(79)} x2={132 * SCALE} y2={level(79)} />
+        <line className="scene__mast" style={{ strokeWidth: 0.8 }} x1={-110 * SCALE} y1={level(80)} x2={110 * SCALE} y2={level(80)} />
       </g>
       <path ref={sea} className="scene__sea" />
       <path ref={surface} className="scene__surface" />
