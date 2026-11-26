@@ -63,4 +63,13 @@ describe('trend words', () => {
     expect(trendText(recent, 'water_temp_c', 1, '°C')).toBe('steady')
     expect(trendText(recent, 'air_pressure_hpa', 1, 'hPa')).toMatch(/^\u2193 falling 1\.\d hPa an hour$/)
   })
+
+  it('names no trend from a handful of reports', () => {
+    // Three reports of the sample, 20 s apart, would read "falling 270 % an hour" for the humidity.
+    for (const count of [1, 3, 20, 44]) {
+      expect(trendText(recent.slice(0, count), 'humidity_pct', 0, '%'), `${count} reports`).toBe('no trend yet')
+      expect(notices(recent.slice(0, count), 4, session.interval_s).some((notice) => notice.place === 'air_pressure_hpa')).toBe(false)
+    }
+    expect(trendText(recent.slice(0, 45), 'humidity_pct', 0, '%')).not.toBe('no trend yet')
+  })
 })

@@ -74,13 +74,18 @@ export function series(reports: readonly Report[], key: Quantity, count: number)
   return values
 }
 
-/** Change per hour by a least-squares line through the reports that carry a time. */
+/** Reports a trend needs: three quarters of the sixty the page looks at. A line through
+ *  fewer turns the noise of a sensor into "falling 270 % an hour". */
+export const TREND_NEEDS = 45
+
+/** Change per hour by a least-squares line through the reports that carry a time.
+ *  Null while there are too few of them to say. */
 export function trendPerHour(reports: readonly Report[], key: Quantity): number | null {
   const points = reports.flatMap((report) => {
     const value = report[key]
     return report.time !== null && value !== null ? [[report.time, value] as const] : []
   })
-  if (points.length < 3) return null
+  if (points.length < TREND_NEEDS) return null
   const meanTime = points.reduce((sum, point) => sum + point[0], 0) / points.length
   const meanValue = points.reduce((sum, point) => sum + point[1], 0) / points.length
   let numerator = 0

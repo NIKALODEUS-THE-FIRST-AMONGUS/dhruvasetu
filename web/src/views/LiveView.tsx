@@ -5,7 +5,7 @@ import { BuoyScene } from '../components/BuoyScene'
 import { Chartlet } from '../components/Chartlet'
 import type { Telemetry } from '../data/store'
 import type { BuoyState, Quantity, Report } from '../data/types'
-import { drift, fixed, gaps, latitude, longitude, series, signed, thousands, utcDate, utcTime } from '../lib/format'
+import { drift, duration, fixed, gaps, latitude, longitude, series, signed, thousands, utcDate, utcTime } from '../lib/format'
 import { headline, notices, trendText } from '../lib/insight'
 
 const HISTORY = 60
@@ -145,7 +145,8 @@ interface LiveViewProps {
 
 export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
   const { reports, latest, session } = telemetry
-  const window = `${Math.round((Math.min(reports.length, HISTORY) * session.interval_s) / 60)} min`
+  // The time the small curves span: from the oldest report shown to the newest.
+  const window = duration((Math.min(reports.length, HISTORY) - 1) * session.interval_s)
   const history = (key: Quantity) => series(reports, key, HISTORY)
   const aboveFreezing =
     latest.water_temp_c !== null && latest.freezing_point_c !== null ? latest.water_temp_c - latest.freezing_point_c : null
