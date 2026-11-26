@@ -1,5 +1,7 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
+import { AlertBar } from './components/AlertBar'
+import type { Alarm } from './components/AlertBar'
 import { Step } from './components/basics'
 import { TopBar } from './components/TopBar'
 import type { Theme } from './components/TopBar'
@@ -9,7 +11,9 @@ import { createStore, useTelemetry } from './data/store'
 import type { Telemetry } from './data/store'
 import { parseSession } from './data/types'
 import sessionFile from './fixtures/session.json'
+import { ago, utcTime } from './lib/format'
 import { PARTS, assess } from './lib/health'
+import { notices } from './lib/insight'
 import { BuoyView } from './views/BuoyView'
 import { LiveView } from './views/LiveView'
 
@@ -140,6 +144,17 @@ export default function App() {
     (item) => item.status === 'fail' || item.status === 'doubt',
   )
   const attention = { count: troubled.length, worst: troubled.some((item) => item.status === 'fail') ? ('fail' as const) : ('doubt' as const) }
+  // Whatever is an alarm goes on the red bar, on every view. The words are fixed; the detail may count.
+  const alarms: Alarm[] = notices(shown.reports.slice(-60), sinceHeard, session.interval_s)
+    .filter((notice) => notice.tone === 'alarm')
+    .map((notice) =>
+      notice.stale
+        ? {
+            text: 'Nothing heard from the buoy.',
+            detail: `Its last report came ${ago(sinceHeard)}, at ${utcTime(latest.time)} UTC. Everything shown is that report.`,
+          }
+        : { text: notice.text },
+    )
 
   return (
     <MotionConfig reducedMotion="user">
@@ -160,6 +175,7 @@ export default function App() {
         />
 
         <div>
+          <AlertBar alarms={alarms} partsHref={view === 'buoy' ? undefined : '#/buoy'} />
           <AnimatePresence initial={false}>
             {guide && view === 'live' && (
               <motion.ol

@@ -83,4 +83,9 @@ describe('colours', () => {
       expect(ratio(tokens[name]!, tokens.paper!), name).toBeGreaterThanOrEqual(4.5)
     }
   })
+
+  it('the words on the alert bar hold 4.5:1 on its red', () => {
+    const tokens = Object.fromEntries([...css.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})/g)].map((match) => [match[1], match[2]]))
+    expect(ratio(tokens['on-alert']!, tokens.alert!)).toBeGreaterThanOrEqual(4.5)
+  })
 })

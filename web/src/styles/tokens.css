@@ -27,6 +27,9 @@
   --ok: #1e6b4a;
   --ice: #245fa0;
   --hull: #fdfbf5;
+  /* The alert bar is red in both themes, with its own ink. */
+  --alert: #b42318;
+  --on-alert: #fff7f4;
 }
 
 :root[data-theme='dark'] {
