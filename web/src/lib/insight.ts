@@ -39,6 +39,7 @@ export const STEADY_BELOW: Partial<Record<Quantity, number>> = {
 
 /** What a quantity is doing, in words: "steady", or "falling 1.8 hPa an hour". */
 export function trendText(reports: readonly Report[], key: Quantity, digits: number, unit: string, factor = 1): string {
+  if (reports[reports.length - 1]?.[key] === null) return 'no value'
   const perHour = trendPerHour(reports, key)
   if (perHour === null) return ''
   if (Math.abs(perHour) < (STEADY_BELOW[key] ?? 0)) return 'steady'

@@ -17,6 +17,8 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: true,
+    // One page, served from the same machine or as one cached file: splitting it buys nothing.
+    chunkSizeWarningLimit: 700,
   },
   test: {
     environment: 'node',

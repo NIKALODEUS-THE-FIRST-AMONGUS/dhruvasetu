@@ -77,6 +77,15 @@ for (const [name, width, height, query] of shots) {
   const answer = await page.locator('.window__test').textContent()
   if (!answer?.includes('MPU6050')) problems.push(`playing: no self-test answer, got: ${answer}`)
   console.log('self-test', JSON.stringify(answer))
+  await page.goto(base + '?still&theme=light&fault=water_temp', { waitUntil: 'networkidle' })
+  await page.locator('.tabs__item[href="#/data"]').hover()
+  await page.locator('.link').click()
+  await page.waitForTimeout(500)
+  if (!(await page.locator('.pop').textContent())?.includes('Where the numbers come from')) problems.push('bar: the link details did not open')
+  await page.screenshot({ path: 'shots/bar-open.png', clip: { x: 0, y: 0, width: 1536, height: 330 } })
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(700)
+  if ((await page.locator('.pop').count()) !== 0) problems.push('bar: Escape did not close the link details')
   await context.close()
 }
 

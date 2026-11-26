@@ -1,19 +1,18 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
-import { Mark, Step } from './components/basics'
+import { Step } from './components/basics'
+import { TopBar } from './components/TopBar'
+import type { Theme } from './components/TopBar'
 import { isFault, withFault } from './data/simulatedBuoy'
 import type { Fault } from './data/simulatedBuoy'
 import { createStore, useTelemetry } from './data/store'
-import type { Source } from './data/types'
 import { parseSession } from './data/types'
 import sessionFile from './fixtures/session.json'
-import { ago } from './lib/format'
-import { PARTS } from './lib/health'
+import { PARTS, assess } from './lib/health'
 import { BuoyView } from './views/BuoyView'
 import { LiveView } from './views/LiveView'
 
 type View = 'live' | 'buoy' | 'data' | 'about'
-type Theme = 'light' | 'dark'
 
 const VIEWS: readonly { id: View; label: string; planned: string }[] = [
   { id: 'live', label: 'Live', planned: '' },
@@ -21,7 +20,6 @@ const VIEWS: readonly { id: View; label: string; planned: string }[] = [
   { id: 'data', label: 'Data', planned: 'History with zoom, recovered reports marked, CSV download and a printed test report.' },
   { id: 'about', label: 'About', planned: 'What the buoy is, how the data travels, what is measured and what is not.' },
 ]
-const SOURCE_LABEL: Record<Source, string> = { live: 'Live', simulated: 'Simulated', replay: 'Replay' }
 
 /** The order in which the Live view is read. The numbers match the markers on the page. */
 const GUIDE: readonly { ask: string; look: string }[] = [
@@ -109,66 +107,29 @@ export default function App() {
   const { latest } = shown
   const sinceHeard = STILL ? session.now - (latest.time ?? session.now) : Math.max(0, (now - telemetry.arrivedAt) / 1000)
   const planned = useMemo(() => VIEWS.find((item) => item.id === view)!, [view])
+  const troubled = assess(shown.reports.slice(-60), sinceHeard, session.interval_s).filter(
+    (item) => item.status === 'fail' || item.status === 'doubt',
+  )
+  const attention = { count: troubled.length, worst: troubled.some((item) => item.status === 'fail') ? ('fail' as const) : ('doubt' as const) }
 
   return (
     <MotionConfig reducedMotion="user">
       <div className="sheet">
-        <div>
-          <header className="title">
-            <a className="brand" href="#/live">
-              <Mark className="brand__mark" />
-              <div>
-                <h1 className="brand__name">Dhruva Setu</h1>
-                <div className="label brand__sub">Ocean observation buoy · {latest.buoy_name}</div>
-              </div>
-            </a>
-            <nav className="nav" aria-label="Views">
-              {VIEWS.map((item) => (
-                <a key={item.id} className="nav__item" href={`#/${item.id}`} aria-current={item.id === view ? 'page' : undefined}>
-                  {item.label}
-                  {item.id === view && (
-                    <motion.span className="nav__line" layoutId="nav-line" transition={{ type: 'spring', stiffness: 520, damping: 42 }} />
-                  )}
-                </a>
-              ))}
-            </nav>
-            <div className="title__right">
-              <div className="source">
-                <Step number={1} shown={guide && view === 'live'} />
-                <span className="tag" style={session.source === 'live' ? { color: 'var(--ok)' } : undefined}>
-                  {SOURCE_LABEL[session.source]}
-                </span>
-                <span>{session.scenario}</span>
-              </div>
-              <div className="heard" role="status">
-                <motion.span
-                  key={latest.seq}
-                  className="heard__dot"
-                  initial={{ scale: 2.2, opacity: 0.35 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ duration: 0.7 }}
-                />
-                heard {ago(sinceHeard)}
-              </div>
-              <button className="chip" type="button" aria-pressed={guide} onClick={() => setGuide(!guide)} title="How to read this page (G)">
-                Guide
-              </button>
-              <button className="chip" type="button" onClick={() => chooseTheme(otherTheme)} title={`Switch to the ${otherTheme} theme (T)`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                  {theme === 'light' ? (
-                    <path d="M20 14.5 A8 8 0 1 1 9.5 4 A6.5 6.5 0 0 0 20 14.5 Z" />
-                  ) : (
-                    <>
-                      <circle cx="12" cy="12" r="4" />
-                      <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
-                    </>
-                  )}
-                </svg>
-                {otherTheme === 'dark' ? 'Dark' : 'Light'}
-              </button>
-            </div>
-          </header>
+        <TopBar
+          views={VIEWS}
+          view={view}
+          attention={attention}
+          session={session}
+          latest={latest}
+          sinceHeard={sinceHeard}
+          guide={guide && view === 'live'}
+          guideOffered={view === 'live'}
+          onGuide={() => setGuide(!guide)}
+          theme={theme}
+          onTheme={() => chooseTheme(otherTheme)}
+        />
 
+        <div>
           <AnimatePresence initial={false}>
             {guide && view === 'live' && (
               <motion.ol

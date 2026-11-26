@@ -114,18 +114,6 @@ button {
   color: var(--ink-3);
 }
 
-.tag {
-  display: inline-block;
-  font: 600 0.66rem/1 var(--font-sans);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.22em 0.45em 0.2em;
-  border: 1px solid currentColor;
-  border-radius: 2px;
-  color: var(--amber);
-  white-space: nowrap;
-}
-
 .label__note {
   color: var(--amber);
 }

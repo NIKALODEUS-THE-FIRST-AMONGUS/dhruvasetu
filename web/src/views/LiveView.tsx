@@ -190,7 +190,7 @@ export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
             step={<Step number={3} shown={guide} />}
           >
             <span>{trendText(recent, 'water_temp_c', 1, '°C')}</span>
-            <span>{fixed(aboveFreezing, 2)} °C above freezing</span>
+            {aboveFreezing !== null && <span>{fixed(aboveFreezing, 2)} °C above freezing</span>}
           </Tile>
           <Tile
             label="Conductivity"
@@ -204,7 +204,7 @@ export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
             marked={marked('conductivity_ms_cm')}
           >
             <span>{trendText(recent, 'conductivity_ms_cm', 1, 'mS/cm')}</span>
-            <span>salinity {fixed(latest.salinity, 1)}</span>
+            {latest.salinity !== null && <span>salinity {fixed(latest.salinity, 1)}</span>}
           </Tile>
           <Tile
             label="Significant wave height"
@@ -217,7 +217,7 @@ export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
             marked={marked('wave_hs_m')}
           >
             <span>{trendText(recent, 'wave_hs_m', 1, smallWaves ? 'cm' : 'm', waveFactor)}</span>
-            <span>period {fixed(latest.wave_tp_s, 1)} s</span>
+            {latest.wave_tp_s !== null && <span>period {fixed(latest.wave_tp_s, 1)} s</span>}
           </Tile>
           <NoiseTile report={latest} />
           <Tile label="Air pressure" value={latest.air_pressure_hpa} digits={1} unit="hPa" history={history('air_pressure_hpa')} minSpan={1.5} window={window} marked={marked('air_pressure_hpa')}>
