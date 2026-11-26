@@ -6,6 +6,7 @@ import type { Theme } from './components/TopBar'
 import { isFault, withFault } from './data/simulatedBuoy'
 import type { Fault } from './data/simulatedBuoy'
 import { createStore, useTelemetry } from './data/store'
+import type { Telemetry } from './data/store'
 import { parseSession } from './data/types'
 import sessionFile from './fixtures/session.json'
 import { PARTS, assess } from './lib/health'
@@ -40,6 +41,19 @@ const askedFault = query.get('fault')
 const FIRST_FAULT: Fault = isFault(askedFault) ? askedFault : 'none'
 const FAULT_FROM = session.reports[STILL ? Math.max(0, session.reports.length - 9) : Math.min(61, session.reports.length - 1)]!.seq
 const FIRST_PART = PARTS.find((part) => part.id === query.get('part'))?.id ?? null
+/** A held page with a silent buoy stands at this many seconds without a report: past the alarm. */
+const STILL_SILENCE_S = 4.5 * session.interval_s
+
+/** A fault switched on to see what the page does. Only simulated and replayed data can have one. */
+interface Rehearsal {
+  kind: Fault
+  /** The first report that carries the fault. */
+  from: number
+  /** The run of the sample in which it was switched on. */
+  run: number
+  /** For a silent buoy: the page as it stood when its last report arrived. */
+  frozen: Telemetry | null
+}
 
 function readView(): View {
   const name = window.location.hash.replace(/^#\/?/, '')
@@ -67,7 +81,12 @@ export default function App() {
   const [view, setView] = useState<View>(readView)
   const [theme, setTheme] = useState<Theme>(readTheme)
   const [guide, setGuide] = useState(() => query.has('guide'))
-  const [fault, setFault] = useState({ kind: FIRST_FAULT, from: FAULT_FROM })
+  const [fault, setFault] = useState<Rehearsal>(() => ({
+    kind: FIRST_FAULT,
+    from: FAULT_FROM,
+    run: 0,
+    frozen: FIRST_FAULT === 'silent' ? store.getSnapshot() : null,
+  }))
   const now = useSeconds()
   const otherTheme: Theme = theme === 'light' ? 'dark' : 'light'
 
@@ -98,16 +117,26 @@ export default function App() {
     setTheme(next)
   }
 
-  // A rehearsed fault changes the reports from the moment it is switched on.
+  // A rehearsed fault changes the reports from the moment it is switched on. A silent buoy
+  // changes none: the page keeps what it had and no further report reaches it.
   const shown = useMemo(() => {
     if (fault.kind === 'none') return telemetry
-    const reports = telemetry.reports.map((report) => (report.seq >= fault.from ? withFault(report, fault.kind) : report))
+    if (fault.kind === 'silent') return fault.frozen ?? telemetry
+    // A fault switched on in an earlier run of the sample is there from the start of this one.
+    const from = telemetry.run > fault.run ? Number.NEGATIVE_INFINITY : fault.from
+    const reports = telemetry.reports.map((report) => (report.seq >= from ? withFault(report, fault.kind) : report))
     return { ...telemetry, reports, latest: reports[reports.length - 1]! }
   }, [telemetry, fault])
   const { latest } = shown
-  const sinceHeard = STILL ? session.now - (latest.time ?? session.now) : Math.max(0, (now - telemetry.arrivedAt) / 1000)
+  const sinceHeard = STILL
+    ? fault.kind === 'silent'
+      ? STILL_SILENCE_S
+      : session.now - (latest.time ?? session.now)
+    : Math.max(0, (now - shown.arrivedAt) / 1000)
+  // The last report of a file is on the page and the sample is about to start again.
+  const ended = !STILL && session.source !== 'live' && fault.kind !== 'silent' && telemetry.complete
   const planned = useMemo(() => VIEWS.find((item) => item.id === view)!, [view])
-  const troubled = assess(shown.reports.slice(-60), sinceHeard, session.interval_s).filter(
+  const troubled = assess(shown.reports.slice(-60), sinceHeard, session).filter(
     (item) => item.status === 'fail' || item.status === 'doubt',
   )
   const attention = { count: troubled.length, worst: troubled.some((item) => item.status === 'fail') ? ('fail' as const) : ('doubt' as const) }
@@ -122,6 +151,7 @@ export default function App() {
           session={session}
           latest={latest}
           sinceHeard={sinceHeard}
+          ended={ended}
           guide={guide && view === 'live'}
           guideOffered={view === 'live'}
           onGuide={() => setGuide(!guide)}
@@ -171,7 +201,7 @@ export default function App() {
                 sinceHeard={sinceHeard}
                 held={STILL}
                 fault={fault.kind}
-                onFault={(kind) => setFault({ kind, from: latest.seq })}
+                onFault={(kind) => setFault({ kind, from: latest.seq, run: telemetry.run, frozen: kind === 'silent' ? telemetry : null })}
                 initialPart={FIRST_PART}
               />
             ) : (

@@ -1,5 +1,5 @@
 import type { Quantity, Report } from '../data/types'
-import { fixed, gaps, trendPerHour } from './format'
+import { duration, fixed, gaps, trendPerHour } from './format'
 
 /** Where on the page a notice points: a measurement tile, or a cell of the bottom line. */
 export type Place = Quantity | 'link' | 'hull'
@@ -8,6 +8,8 @@ export interface Notice {
   tone: 'notice' | 'alarm'
   text: string
   place: Place
+  /** Set on the notice that the buoy is not heard: everything else on the page is then old. */
+  stale?: true
 }
 
 /** Sea state by significant wave height, WMO code table 3700 (the Douglas scale). */
@@ -53,7 +55,7 @@ export function notices(reports: readonly Report[], sinceHeardS: number, interva
   if (!latest) return []
   const found: Notice[] = []
   if (sinceHeardS > 3 * intervalS) {
-    found.push({ tone: 'alarm', text: `Nothing heard for ${Math.round(sinceHeardS)} s.`, place: 'link' })
+    found.push({ tone: 'alarm', text: `Nothing heard for ${duration(sinceHeardS)}.`, place: 'link', stale: true })
   }
   if (latest.leak) found.push({ tone: 'alarm', text: 'Water inside the hull.', place: 'hull' })
   if (latest.tag_ok === false) {
@@ -96,7 +98,11 @@ export function notices(reports: readonly Report[], sinceHeardS: number, interva
 /** One or two sentences that say what the page shows: the state, then what deserves attention. */
 export function headline(latest: Report, found: readonly Notice[]): string {
   const alarms = found.filter((notice) => notice.tone === 'alarm')
-  if (alarms.length > 0) return `${alarms.map((notice) => notice.text).join(' ')} State ${latest.state}.`
+  if (alarms.length > 0) {
+    // A silent buoy has no state the page can vouch for, only the one it reported last.
+    const state = alarms.some((notice) => notice.stale) ? 'Last known state' : 'State'
+    return `${alarms.map((notice) => notice.text).join(' ')} ${state} ${latest.state}.`
+  }
   const sea = seaState(latest.wave_hs_m)
   const state =
     latest.state === 'ICE'

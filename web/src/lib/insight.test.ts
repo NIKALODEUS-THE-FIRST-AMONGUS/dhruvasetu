@@ -35,9 +35,11 @@ describe('the headline', () => {
     expect(headline(wet, found)).toBe('Water inside the hull. State NORMAL.')
   })
 
-  it('raises the alarm when the buoy falls silent', () => {
+  it('raises the alarm when the buoy falls silent, and calls its state the last known one', () => {
     const found = notices(recent, 45, session.interval_s)
     expect(found[0]).toMatchObject({ tone: 'alarm', place: 'link', text: 'Nothing heard for 45 s.' })
+    expect(headline(latest, found)).toBe('Nothing heard for 45 s. Last known state NORMAL.')
+    expect(notices(recent, 7200, session.interval_s)[0]!.text).toBe('Nothing heard for 2 h.')
   })
 
   it('speaks of ice when the water is at its freezing point', () => {

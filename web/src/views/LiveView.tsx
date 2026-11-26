@@ -158,15 +158,20 @@ export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
   const smallWaves = latest.wave_hs_m !== null && latest.wave_hs_m < 0.995
   const waveFactor = smallWaves ? 100 : 1
   const sent = session.received_total + session.lost_total
-  const happened = events(reports)
+  /** Nothing heard for three intervals: the page then holds the last report, and shows it as old. */
+  const silent = sinceHeard > 3 * session.interval_s
+  const happened = silent
+    ? [{ time: latest.time, text: 'Last report heard. Nothing since.' }, ...events(reports)].slice(0, 4)
+    : events(reports)
 
   return (
-    <div className="live">
-      <section className="state" data-state={latest.state} data-alarm={alarmed || undefined} aria-label="State of the buoy">
+    <div className="live" data-stale={silent || undefined}>
+      <section className="state" data-state={latest.state} data-alarm={alarmed || undefined} data-stale={silent || undefined} aria-label="State of the buoy">
         <div className="state__now">
           <Step number={2} shown={guide} />
           <StateGlyph state={latest.state} />
           <span className="state__word">{latest.state}</span>
+          {silent && <span className="state__stale">last known</span>}
         </div>
         <p className="state__headline" role="status">
           {headline(latest, noticed)}

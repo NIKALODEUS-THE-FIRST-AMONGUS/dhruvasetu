@@ -16,6 +16,8 @@ const shots = [
   ['live-laptop-guide', 1536, 864, '?still&theme=light&guide'],
   ['buoy-laptop-light', 1536, 864, '?still&theme=light#/buoy'],
   ['buoy-laptop-fault', 1536, 864, '?still&theme=light&fault=water_temp&part=water_temp#/buoy'],
+  ['live-laptop-silent', 1536, 864, '?still&theme=light&fault=silent'],
+  ['buoy-laptop-silent', 1536, 864, '?still&theme=dark&fault=silent&part=radio#/buoy'],
 ]
 
 const server = await preview({ preview: { port: PORT, strictPort: true } })
@@ -86,6 +88,37 @@ for (const [name, width, height, query] of shots) {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(700)
   if ((await page.locator('.pop').count()) !== 0) problems.push('bar: Escape did not close the link details')
+  await context.close()
+}
+
+// Let the sample run past its end, on a clock the test turns by hand. It must start again,
+// and the page must never take the end of a file for a silent buoy.
+{
+  const context = await browser.newContext({ viewport: { width: 1536, height: 864 } })
+  const page = await context.newPage()
+  page.on('console', (message) => {
+    if (message.type() === 'error') problems.push(`long run: console error: ${message.text()}`)
+  })
+  page.on('pageerror', (error) => problems.push(`long run: ${error.message}`))
+  await page.clock.install()
+  await page.goto(base, { waitUntil: 'networkidle' })
+  const seen = []
+  for (let step = 0; step < 30; step += 1) {
+    await page.clock.runFor(10_000)
+    seen.push(
+      await page.evaluate(() => ({
+        clock: document.querySelector('.state__clock')?.textContent ?? '',
+        headline: document.querySelector('.state__headline')?.textContent ?? '',
+        heard: document.querySelector('.link__heard')?.textContent ?? '',
+      })),
+    )
+  }
+  const restarts = seen.filter((now, index) => index > 0 && now.clock < seen[index - 1].clock).length
+  if (seen.some((now) => now.headline.includes('Nothing heard') || now.heard.includes('silent'))) {
+    problems.push('long run: the page called the buoy silent when the sample ended')
+  }
+  if (restarts < 2) problems.push(`long run: the sample started again ${restarts} times in 300 s, expected 2`)
+  console.log('long run', JSON.stringify({ first: seen[0].clock, last: seen[seen.length - 1].clock, restarts }))
   await context.close()
 }
 

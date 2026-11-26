@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import contract from '../../../contract/report.v1.json'
 import { parseSession } from '../data/types'
 import sessionFile from '../fixtures/session.json'
-import { ago, drift, fixed, gaps, latitude, longitude, series, signed, trendPerHour, utcDate, utcTime } from './format'
+import { ago, drift, duration, fixed, gaps, latitude, longitude, series, signed, trendPerHour, utcDate, utcTime } from './format'
 
 const session = parseSession(sessionFile)
 
@@ -33,6 +33,7 @@ describe('positions and times', () => {
     expect(utcDate(1795676400)).toBe('26 Nov 2026')
     expect(ago(4)).toBe('4 s ago')
     expect(ago(600)).toBe('10 min ago')
+    expect([45, 600, 7200].map(duration)).toEqual(['45 s', '10 min', '2 h'])
   })
 })
 

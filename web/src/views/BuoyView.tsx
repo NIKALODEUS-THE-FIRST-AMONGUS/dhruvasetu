@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { FAULTS, selfTest } from '../data/simulatedBuoy'
 import type { Fault, SelfTest } from '../data/simulatedBuoy'
 import type { Telemetry } from '../data/store'
-import { thousands } from '../lib/format'
+import { duration, thousands } from '../lib/format'
 import { STATUS_WORD, assess } from '../lib/health'
 import type { PartHealth, PartId, Status } from '../lib/health'
 
@@ -81,6 +81,12 @@ function StatusMark({ status }: { status: Status }) {
   )
 }
 
+/** The outcome of one check, as a sign for the eye and a word for a screen reader. */
+function outcome(passed: boolean | null): { sign: 'pass' | 'fail' | 'none'; word: string } {
+  if (passed === null) return { sign: 'none', word: 'Not checked' }
+  return passed ? { sign: 'pass', word: 'Passed' } : { sign: 'fail', word: 'Failed' }
+}
+
 /** The state of a part as a word in its colour. */
 function Badge({ status }: { status: Status }) {
   return (
@@ -150,8 +156,12 @@ interface BuoyViewProps {
 
 export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialPart }: BuoyViewProps) {
   const { reports, latest, session } = telemetry
-  const health = assess(reports.slice(-60), sinceHeard, session.interval_s)
+  const health = assess(reports.slice(-60), sinceHeard, session)
+  /** Nothing heard for three intervals: what the page holds is the last report, and no question can be put. */
+  const silent = sinceHeard > 3 * session.interval_s
   const [open, setOpen] = useState<PartId | null>(initialPart)
+  /** The view itself: a part's window stays inside it, clear of the top bar and the credit line. */
+  const [frame, setFrame] = useState<HTMLDivElement | null>(null)
   const [shown, setShown] = useState<'all' | 'attention'>('all')
   const [asked, setAsked] = useState<ReadonlyMap<PartId, number>>(new Map())
   const [answers, setAnswers] = useState<ReadonlyMap<PartId, Answer>>(new Map())
@@ -159,7 +169,7 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
 
   // An answer comes with the buoy's next report. A held sample has none, so it comes after a pause.
   useEffect(() => {
-    const due = [...asked].filter(([, seq]) => held || latest.seq > seq).map(([part]) => part)
+    const due = [...asked].filter(([, seq]) => held || latest.seq !== seq).map(([part]) => part)
     if (due.length === 0) return
     const settle = () => {
       setAnswers((before) => new Map([...before, ...due.map((part) => [part, { ...selfTest(part, latest, fault), seq: latest.seq }] as const)]))
@@ -172,28 +182,30 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
   const ask = (parts: readonly PartId[]) => setAsked((before) => new Map([...before, ...parts.map((part) => [part, latest.seq] as const)]))
   const worst = (item: PartHealth): Status => (item.status === 'ok' && answers.get(item.part.id)?.passed === false ? 'fail' : item.status)
   const fitted = health.filter((item) => item.status !== 'absent')
-  const troubled = fitted.filter((item) => worst(item) !== 'ok')
+  const troubled = fitted.filter((item) => worst(item) === 'fail' || worst(item) === 'doubt')
   const tested = fitted.filter((item) => answers.has(item.part.id))
   const listed = shown === 'attention' ? troubled : health
 
   return (
     <Tooltip.Provider delayDuration={250} skipDelayDuration={150}>
-      <div className="buoy">
+      <div className="buoy" ref={setFrame}>
         <aside className="buoy__brief" aria-label="Summary">
           <div className="card summary">
             <HealthRing states={fitted.map(worst)} />
             <div>
               <h2 className="label">Buoy {latest.buoy_name}</h2>
               <p className="buoy__verdict" role="status">
-                {troubled.length === 0
-                  ? `All ${fitted.length} fitted parts are working.`
-                  : `${troubled.length} of ${fitted.length} fitted parts ${troubled.length === 1 ? 'needs' : 'need'} attention.`}
+                {silent
+                  ? `Nothing heard for ${duration(sinceHeard)}. The parts cannot be judged until a report arrives.`
+                  : troubled.length === 0
+                    ? `All ${fitted.length} fitted parts are working.`
+                    : `${troubled.length} of ${fitted.length} fitted parts ${troubled.length === 1 ? 'needs' : 'need'} attention.`}
               </p>
             </div>
           </div>
 
           <div className="buoy__actions">
-            <motion.button className="button" type="button" whileTap={{ scale: 0.97 }} onClick={() => ask(fitted.map((item) => item.part.id))} disabled={asked.size > 0}>
+            <motion.button className="button" type="button" whileTap={{ scale: 0.97 }} onClick={() => ask(fitted.map((item) => item.part.id))} disabled={asked.size > 0 || silent}>
               {asked.size > 0 && (
                 <motion.svg className="button__spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.9, ease: 'linear' }} aria-hidden="true">
                   <path d="M8 2 a6 6 0 1 1 -6 6" />
@@ -202,9 +214,11 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
               {asked.size > 0 ? 'Asking the buoy' : 'Check all parts'}
             </motion.button>
             <p className="buoy__text" role="status">
-              {tested.length === 0
-                ? 'No self-test asked yet.'
-                : `Self-test: ${tested.filter((item) => answers.get(item.part.id)!.passed).length} of ${tested.length} passed, with report ${thousands(Math.max(...tested.map((item) => answers.get(item.part.id)!.seq)))}.`}
+              {silent
+                ? 'The buoy can be asked again once a report is heard.'
+                : tested.length === 0
+                  ? 'No self-test asked yet.'
+                  : `Self-test: ${tested.filter((item) => answers.get(item.part.id)!.passed).length} of ${tested.length} passed, with report ${thousands(Math.max(...tested.map((item) => answers.get(item.part.id)!.seq)))}.`}
             </p>
           </div>
 
@@ -312,11 +326,13 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
                         forceMount
                         side={item.part.x >= 0 ? 'right' : 'left'}
                         sideOffset={14}
-                        collisionPadding={12}
+                        collisionBoundary={frame}
+                        collisionPadding={8}
                         onOpenAutoFocus={(event) => event.preventDefault()}
                       >
                         <motion.div
                           className="pop part"
+                          data-stale={silent || undefined}
                           initial={{ opacity: 0, scale: 0.94 }}
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.12 } }}
@@ -334,6 +350,7 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
                           <Badge status={status} />
                           {status !== 'absent' && (
                             <>
+                              {silent && <p className="part__stale">Nothing heard for {duration(sinceHeard)}. What follows is the last report.</p>}
                               <dl className="part__readings">
                                 {item.readings.map(([name, value]) => (
                                   <div key={name}>
@@ -342,24 +359,30 @@ export function BuoyView({ telemetry, sinceHeard, held, fault, onFault, initialP
                                   </div>
                                 ))}
                               </dl>
-                              <h4 className="label">Checked on every report</h4>
+                              <h4 className="label">{silent ? 'Checked on the last report' : 'Checked on every report'}</h4>
                               <ul className="part__checks">
                                 {item.checks.map((check) => (
-                                  <li key={check.label} data-passed={check.passed}>
+                                  <li key={check.label} data-result={outcome(check.passed).sign}>
+                                    <span className="sr-only">{outcome(check.passed).word}: </span>
                                     {check.label}
                                   </li>
                                 ))}
                               </ul>
+                              {item.checks.some((check) => check.passed === null) && (
+                                <p className="part__hint">A dash: not checked, because what it needs was not sent.</p>
+                              )}
                               <h4 className="label">The buoy's own test</h4>
                               <p className="part__test" data-passed={answer?.passed}>
                                 {waiting
                                   ? 'Asked. The answer comes with the next report.'
                                   : answer
                                     ? `${answer.detail} With report ${thousands(answer.seq)}.`
-                                    : 'Not asked yet.'}
+                                    : silent
+                                      ? 'Not asked. It can be asked once a report is heard.'
+                                      : 'Not asked yet.'}
                                 {simulated && answer && !waiting && <span> Answer of the simulated buoy.</span>}
                               </p>
-                              <motion.button className="button button--quiet" type="button" whileTap={{ scale: 0.97 }} onClick={() => ask([item.part.id])} disabled={waiting}>
+                              <motion.button className="button button--quiet" type="button" whileTap={{ scale: 0.97 }} onClick={() => ask([item.part.id])} disabled={waiting || silent}>
                                 {waiting ? 'Asking' : 'Check status'}
                               </motion.button>
                             </>

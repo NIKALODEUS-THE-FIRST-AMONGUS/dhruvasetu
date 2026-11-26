@@ -117,3 +117,13 @@ button {
 .label__note {
   color: var(--amber);
 }
+
+/* Words for a screen reader where the page speaks with a sign or a colour. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

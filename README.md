@@ -21,7 +21,11 @@ Needs Node 22 or newer.
     npm install --ignore-scripts
     npm run dev
 
-Open http://localhost:5173. Add `?still` to the address to hold the sample still, and `&theme=dark` for the dark theme.
+Open http://localhost:5173. Add `?still` to the address to hold the sample still, `&theme=dark` for the dark theme, and
+`&fault=silent` to rehearse a fault from the start (also `water_temp`, `conductivity`, `motion`, `leak`).
+
+On Windows, double-clicking `start.cmd` does it all: it builds the page, serves it at http://localhost:4173 and opens
+the browser. Close its window to stop the page.
 
 ## Check it
 
@@ -35,12 +39,14 @@ Open http://localhost:5173. Add `?still` to the address to hold the sample still
     npm run shots
 
 `npm run shots` photographs the built page with the Chrome on this computer at four screen sizes, lets the sample play,
-and fails if the page logs an error or asks any other server for anything. The pictures go to `web/shots/`.
+runs it past its end on a clock turned by hand, and fails if the page logs an error, asks any other server for
+anything, or takes the end of the sample for a silent buoy. The pictures go to `web/shots/`.
 
 ## Status
 
-Built: the report format and the Live view, on simulated data. Not built yet: the server's live stream and storage,
-the Data, System and About views, the shore receiver.
+Built: the report format, the Live view and the Buoy view (a status dot on every part), on simulated data.
+Not built yet: the server's live stream and storage, the Data and About views, the buoy's own self-test,
+the shore receiver.
 
 ## Licence
 

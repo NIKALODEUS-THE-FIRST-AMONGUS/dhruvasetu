@@ -7,7 +7,7 @@ import type { PartId } from '../lib/health'
 import type { Report } from './types'
 
 /** A fault to rehearse: what the page shows when a part stops working. */
-export type Fault = 'none' | 'water_temp' | 'conductivity' | 'motion' | 'leak'
+export type Fault = 'none' | 'water_temp' | 'conductivity' | 'motion' | 'leak' | 'silent'
 
 export const FAULTS: readonly { id: Fault; label: string }[] = [
   { id: 'none', label: 'No fault' },
@@ -15,13 +15,15 @@ export const FAULTS: readonly { id: Fault; label: string }[] = [
   { id: 'conductivity', label: 'Conductivity cell out of the water' },
   { id: 'motion', label: 'Motion sensor not answering' },
   { id: 'leak', label: 'Water inside the hull' },
+  { id: 'silent', label: 'Nothing heard from the buoy' },
 ]
 
 export function isFault(value: string | null): value is Fault {
   return FAULTS.some((fault) => fault.id === value)
 }
 
-/** The report as the buoy would send it with the fault present. */
+/** The report as the buoy would send it with the fault present.
+ *  A silent buoy changes no report: the page simply stops receiving them (see App). */
 export function withFault(report: Report, fault: Fault): Report {
   switch (fault) {
     case 'water_temp':

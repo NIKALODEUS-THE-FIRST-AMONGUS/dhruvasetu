@@ -53,10 +53,15 @@ export function utcDate(seconds: number | null): string {
   return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`
 }
 
+/** A length of time in the largest unit that reads well: "45 s", "10 min", "3 h". */
+export function duration(seconds: number): string {
+  if (seconds < 90) return `${Math.max(0, Math.round(seconds))} s`
+  if (seconds < 5400) return `${Math.round(seconds / 60)} min`
+  return `${Math.round(seconds / 3600)} h`
+}
+
 export function ago(seconds: number): string {
-  if (seconds < 90) return `${Math.max(0, Math.round(seconds))} s ago`
-  if (seconds < 5400) return `${Math.round(seconds / 60)} min ago`
-  return `${Math.round(seconds / 3600)} h ago`
+  return `${duration(seconds)} ago`
 }
 
 /** The last `count` values of one quantity, missing ones left out. */

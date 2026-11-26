@@ -4,7 +4,7 @@ import * as Tooltip from '@radix-ui/react-tooltip'
 import { useState } from 'react'
 import type { ReactElement } from 'react'
 import type { Report, Session, Source } from '../data/types'
-import { ago, fixed, thousands, utcTime } from '../lib/format'
+import { ago, duration, fixed, thousands, utcTime } from '../lib/format'
 import type { Status } from '../lib/health'
 import { Mark, Step } from './basics'
 
@@ -90,14 +90,21 @@ interface LinkStatusProps {
   session: Session
   latest: Report
   sinceHeard: number
+  /** True while a sample from a file rests on its last report before it starts again. */
+  ended: boolean
   guide: boolean
 }
 
 /** Answers "is it alive?": where the numbers come from and when the buoy was last heard.
  *  It opens to the details of the link. */
-function LinkStatus({ session, latest, sinceHeard, guide }: LinkStatusProps) {
+function LinkStatus({ session, latest, sinceHeard, ended, guide }: LinkStatusProps) {
   const [open, setOpen] = useState(false)
   const silent = sinceHeard > 3 * session.interval_s
+  const heard = ended
+    ? `${session.source === 'replay' ? 'recording' : 'sample'} ended, starting again`
+    : silent
+      ? `silent for ${duration(sinceHeard)}`
+      : `heard ${ago(sinceHeard)}`
   const sent = session.received_total + session.lost_total
   const rows: [string, string][] = [
     ['Source', session.source === 'live' ? 'The shore receiver' : `${SOURCE_LABEL[session.source]}: ${session.scenario}`],
@@ -122,7 +129,7 @@ function LinkStatus({ session, latest, sinceHeard, guide }: LinkStatusProps) {
           <span className="link__source">{SOURCE_LABEL[session.source]}</span>
           <span className="link__rule" />
           <span className="link__heard" role="status">
-            {silent ? 'silent for' : 'heard'} {silent ? `${Math.round(sinceHeard)} s` : ago(sinceHeard)}
+            {heard}
           </span>
           <motion.svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" animate={{ rotate: open ? 180 : 0 }} aria-hidden="true">
             <path d="M2.5 4.5 L6 8 L9.5 4.5" />
@@ -163,6 +170,7 @@ interface TopBarProps<View extends string> extends TabsProps<View> {
   session: Session
   latest: Report
   sinceHeard: number
+  ended: boolean
   guide: boolean
   /** False on views that have no guide: the button is then not offered. */
   guideOffered: boolean
@@ -173,7 +181,7 @@ interface TopBarProps<View extends string> extends TabsProps<View> {
 
 /** Title block of the page: the name, the views, the state of the link, guide and theme.
  *  It stays at the top while the page scrolls and gains a shadow once content passes under it. */
-export function TopBar<View extends string>({ session, latest, sinceHeard, guide, guideOffered, onGuide, theme, onTheme, ...tabs }: TopBarProps<View>) {
+export function TopBar<View extends string>({ session, latest, sinceHeard, ended, guide, guideOffered, onGuide, theme, onTheme, ...tabs }: TopBarProps<View>) {
   const [scrolled, setScrolled] = useState(false)
   const { scrollY } = useScroll()
   useMotionValueEvent(scrollY, 'change', (offset) => setScrolled(offset > 4))
@@ -195,7 +203,7 @@ export function TopBar<View extends string>({ session, latest, sinceHeard, guide
         </motion.div>
 
         <motion.div className="topbar__right" variants={enter}>
-          <LinkStatus session={session} latest={latest} sinceHeard={sinceHeard} guide={guide} />
+          <LinkStatus session={session} latest={latest} sinceHeard={sinceHeard} ended={ended} guide={guide} />
           {guideOffered && (
             <Tip label="How to read this page" keys="G">
               <motion.button className="ghost" type="button" aria-pressed={guide} onClick={onGuide} whileTap={{ scale: 0.95 }}>

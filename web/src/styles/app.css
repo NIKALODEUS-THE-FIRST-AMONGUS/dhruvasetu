@@ -406,6 +406,17 @@
   color: var(--amber);
 }
 
+/* Nothing heard: the state is the one last reported, and is shown as such. */
+.state[data-stale] .state__now {
+  color: var(--ink-3);
+}
+
+.state__stale {
+  font: 500 0.72rem/1 var(--font-sans);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
 .state__headline {
   font-size: 1.22rem;
   font-weight: 450;
@@ -427,6 +438,15 @@
 .tile--marked,
 .strip__cell--marked {
   box-shadow: inset 0 3px 0 var(--amber);
+}
+
+/* Nothing heard: every value on the page is the last one reported. It stays readable
+   and loses its weight, so it cannot be taken for a fresh one. */
+.live[data-stale] .tile__value,
+.live[data-stale] .bar__value,
+.live[data-stale] .panel__note,
+.live[data-stale] .strip__cell strong {
+  color: var(--ink-3);
 }
 
 .tile--marked .tile__sub span:first-child {
@@ -1404,14 +1424,41 @@
   color: var(--ok);
 }
 
-.part__checks li[data-passed='false'] {
+.part__checks li[data-result='fail'] {
   font-weight: 500;
   color: var(--ink);
 }
 
-.part__checks li[data-passed='false']::before {
+.part__checks li[data-result='fail']::before {
   content: '\2717';
   color: var(--alarm);
+}
+
+/* A check that was not made gets a dash, never a tick. */
+.part__checks li[data-result='none'],
+.part__checks li[data-result='none']::before {
+  color: var(--ink-3);
+}
+
+.part__checks li[data-result='none']::before {
+  content: '\2013';
+}
+
+.part__hint {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.part__stale {
+  margin-top: 0.6rem;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--alarm);
+}
+
+.part[data-stale] .part__readings dd {
+  color: var(--ink-3);
 }
 
 .part__test {
