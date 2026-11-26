@@ -18,8 +18,9 @@ const down = (z: number) => ((TOP - z) / HEIGHT) * 100
 
 const mirror = (half: readonly (readonly [number, number])[]) =>
   [...half, ...[...half].reverse().map(([r, z]) => [-r, z] as const)].map(([r, z]) => `${r},${-z}`).join(' ')
-const OUTSIDE = mirror([[104, 0], [110, 6], [110, 68], [132, 68], [132, 90], [114.7, 90], [160, 187.2], [160, 248.2], [146, 248.2], [60, 338.2]])
-const BELOW_DECK = mirror([[106, 6], [105.6, 80], [153.2, 182.2], [128, 182.2], [128, 187.2]])
+// The can and cone are bolted through flanges that turn inward: the outside has no step (keel can: dia 220 over all).
+const OUTSIDE = mirror([[104, 0], [110, 6], [110, 80], [160, 187.2], [160, 248.2], [146, 248.2], [60, 338.2]])
+const BELOW_DECK = mirror([[106, 6], [106, 68], [88, 68], [88, 90], [110.3, 90], [153.2, 182.2], [128, 182.2], [128, 187.2]])
 const UNDER_LID = mirror([[140, 192.2], [140, 248.2], [141.5, 248.2], [58.3, 334.2]])
 const box = (x1: number, x2: number, z1: number, z2: number) => ({ x: x1, y: -z2, width: x2 - x1, height: z2 - z1 })
 
