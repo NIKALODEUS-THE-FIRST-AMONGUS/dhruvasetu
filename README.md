@@ -39,5 +39,9 @@ and fails if the page logs an error or asks any other server for anything. The p
 
 ## Status
 
-Built: the report format and the Live view with sample data. Not built yet: the server's live stream and storage,
-the Data, System and About views, the shore receiver. The project file of the team holds the plan and every decision.
+Built: the report format and the Live view, on simulated data. Not built yet: the server's live stream and storage,
+the Data, System and About views, the shore receiver.
+
+## Licence
+
+MIT. See `LICENSE`.
