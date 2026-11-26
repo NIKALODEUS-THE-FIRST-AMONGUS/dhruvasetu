@@ -21,6 +21,12 @@ export function seaState(heightM: number | null): string | null {
   return SEA_STATES.find(([limit]) => heightM < limit)?.[1] ?? 'phenomenal'
 }
 
+/** Measurements a fitted buoy always sends. A missing one is worth a sentence. */
+const MEASURED: readonly (readonly [Quantity, string])[] = [
+  ['water_temp_c', 'water temperature'], ['conductivity_ms_cm', 'conductivity'], ['wave_hs_m', 'wave height'],
+  ['air_pressure_hpa', 'air pressure'], ['air_temp_c', 'air temperature'],
+]
+
 /** Below this change per hour a quantity is called steady. */
 export const STEADY_BELOW: Partial<Record<Quantity, number>> = {
   water_temp_c: 0.5,
@@ -54,6 +60,13 @@ export function notices(reports: readonly Report[], sinceHeardS: number, interva
   }
   if (latest.low_battery) found.push({ tone: 'notice', text: 'The battery is low.', place: 'hull' })
   if (latest.icing_suspected) found.push({ tone: 'notice', text: 'The hull leans as if ice has built up on it.', place: 'hull' })
+
+  for (const [key, name] of MEASURED) {
+    if (latest[key] === null) found.push({ tone: 'notice', text: `No ${name} in the last report.`, place: key })
+  }
+  if (latest.conductivity_ms_cm !== null && latest.conductivity_ms_cm <= 0.05) {
+    found.push({ tone: 'notice', text: 'The conductivity cell reads as if it is out of the water.', place: 'conductivity_ms_cm' })
+  }
 
   const aboveFreezing =
     latest.water_temp_c !== null && latest.freezing_point_c !== null ? latest.water_temp_c - latest.freezing_point_c : null

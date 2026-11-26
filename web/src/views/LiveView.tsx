@@ -201,6 +201,7 @@ export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
             history={history('conductivity_ms_cm')}
             minSpan={0.3}
             window={window}
+            marked={marked('conductivity_ms_cm')}
           >
             <span>{trendText(recent, 'conductivity_ms_cm', 1, 'mS/cm')}</span>
             <span>salinity {fixed(latest.salinity, 1)}</span>
@@ -213,6 +214,7 @@ export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
             history={history('wave_hs_m').map((value) => value * waveFactor)}
             minSpan={smallWaves ? 5 : 0.6}
             window={window}
+            marked={marked('wave_hs_m')}
           >
             <span>{trendText(recent, 'wave_hs_m', 1, smallWaves ? 'cm' : 'm', waveFactor)}</span>
             <span>period {fixed(latest.wave_tp_s, 1)} s</span>
@@ -221,7 +223,7 @@ export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
           <Tile label="Air pressure" value={latest.air_pressure_hpa} digits={1} unit="hPa" history={history('air_pressure_hpa')} minSpan={1.5} window={window} marked={marked('air_pressure_hpa')}>
             <span>{trendText(recent, 'air_pressure_hpa', 1, 'hPa')}</span>
           </Tile>
-          <Tile label="Air temperature" value={latest.air_temp_c} digits={1} unit="°C" history={history('air_temp_c')} minSpan={1} window={window}>
+          <Tile label="Air temperature" value={latest.air_temp_c} digits={1} unit="°C" history={history('air_temp_c')} minSpan={1} window={window} marked={marked('air_temp_c')}>
             <span>{trendText(recent, 'air_temp_c', 1, '°C')}</span>
           </Tile>
           <Tile label="Relative humidity" value={latest.humidity_pct} digits={0} unit="%" history={history('humidity_pct')} minSpan={6} window={window}>

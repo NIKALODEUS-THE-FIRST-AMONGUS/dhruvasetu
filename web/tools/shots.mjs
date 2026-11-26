@@ -14,6 +14,8 @@ const shots = [
   ['live-projector-light', 1920, 1080, '?still&theme=light'],
   ['live-phone-light', 390, 844, '?still&theme=light'],
   ['live-laptop-guide', 1536, 864, '?still&theme=light&guide'],
+  ['buoy-laptop-light', 1536, 864, '?still&theme=light#/buoy'],
+  ['buoy-laptop-fault', 1536, 864, '?still&theme=light&fault=water_temp&part=water_temp#/buoy'],
 ]
 
 const server = await preview({ preview: { port: PORT, strictPort: true } })
@@ -65,9 +67,16 @@ for (const [name, width, height, query] of shots) {
   const after = await read()
   if (before[0] === after[0]) problems.push('playing: no new report arrived in 6.5 s')
   console.log('playing', JSON.stringify({ before, after }))
-  await page.locator('a[href="#/system"]').click()
+  await page.locator('a[href="#/buoy"]').click()
   await page.waitForTimeout(600)
-  if (!(await page.locator('.placeholder h2').textContent())?.includes('System')) problems.push('playing: the System view did not open')
+  const dots = await page.locator('.section .dot').count()
+  if (dots !== 12) problems.push(`playing: the Buoy view shows ${dots} dots, not 12`)
+  await page.locator('.section .dot[aria-label^="Motion"]').click()
+  await page.getByRole('button', { name: 'Check status' }).click()
+  await page.waitForTimeout(3200)
+  const answer = await page.locator('.window__test').textContent()
+  if (!answer?.includes('MPU6050')) problems.push(`playing: no self-test answer, got: ${answer}`)
+  console.log('self-test', JSON.stringify(answer))
   await context.close()
 }
 

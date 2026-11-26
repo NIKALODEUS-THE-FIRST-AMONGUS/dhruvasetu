@@ -1,20 +1,24 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { Mark, Step } from './components/basics'
+import { isFault, withFault } from './data/simulatedBuoy'
+import type { Fault } from './data/simulatedBuoy'
 import { createStore, useTelemetry } from './data/store'
 import type { Source } from './data/types'
 import { parseSession } from './data/types'
 import sessionFile from './fixtures/session.json'
 import { ago } from './lib/format'
+import { PARTS } from './lib/health'
+import { BuoyView } from './views/BuoyView'
 import { LiveView } from './views/LiveView'
 
-type View = 'live' | 'data' | 'system' | 'about'
+type View = 'live' | 'buoy' | 'data' | 'about'
 type Theme = 'light' | 'dark'
 
 const VIEWS: readonly { id: View; label: string; planned: string }[] = [
   { id: 'live', label: 'Live', planned: '' },
+  { id: 'buoy', label: 'Buoy', planned: '' },
   { id: 'data', label: 'Data', planned: 'History with zoom, recovered reports marked, CSV download and a printed test report.' },
-  { id: 'system', label: 'System', planned: 'The bytes of the last report decoded field by field, link statistics, receiver and server.' },
   { id: 'about', label: 'About', planned: 'What the buoy is, how the data travels, what is measured and what is not.' },
 ]
 const SOURCE_LABEL: Record<Source, string> = { live: 'Live', simulated: 'Simulated', replay: 'Replay' }
@@ -33,6 +37,11 @@ const query = new URLSearchParams(window.location.search)
 const STILL = query.has('still')
 const session = parseSession(sessionFile)
 const store = createStore(session, STILL ? session.reports.length : 60)
+/** `?fault=water_temp` starts with a rehearsed fault; `?part=water_temp` opens that part's window on the Buoy view. */
+const askedFault = query.get('fault')
+const FIRST_FAULT: Fault = isFault(askedFault) ? askedFault : 'none'
+const FAULT_FROM = session.reports[STILL ? Math.max(0, session.reports.length - 9) : Math.min(61, session.reports.length - 1)]!.seq
+const FIRST_PART = PARTS.find((part) => part.id === query.get('part'))?.id ?? null
 
 function readView(): View {
   const name = window.location.hash.replace(/^#\/?/, '')
@@ -60,6 +69,7 @@ export default function App() {
   const [view, setView] = useState<View>(readView)
   const [theme, setTheme] = useState<Theme>(readTheme)
   const [guide, setGuide] = useState(() => query.has('guide'))
+  const [fault, setFault] = useState({ kind: FIRST_FAULT, from: FAULT_FROM })
   const now = useSeconds()
   const otherTheme: Theme = theme === 'light' ? 'dark' : 'light'
 
@@ -90,7 +100,13 @@ export default function App() {
     setTheme(next)
   }
 
-  const { latest } = telemetry
+  // A rehearsed fault changes the reports from the moment it is switched on.
+  const shown = useMemo(() => {
+    if (fault.kind === 'none') return telemetry
+    const reports = telemetry.reports.map((report) => (report.seq >= fault.from ? withFault(report, fault.kind) : report))
+    return { ...telemetry, reports, latest: reports[reports.length - 1]! }
+  }, [telemetry, fault])
+  const { latest } = shown
   const sinceHeard = STILL ? session.now - (latest.time ?? session.now) : Math.max(0, (now - telemetry.arrivedAt) / 1000)
   const planned = useMemo(() => VIEWS.find((item) => item.id === view)!, [view])
 
@@ -187,7 +203,16 @@ export default function App() {
             transition={{ duration: 0.22 }}
           >
             {view === 'live' ? (
-              <LiveView telemetry={telemetry} sinceHeard={sinceHeard} guide={guide} />
+              <LiveView telemetry={shown} sinceHeard={sinceHeard} guide={guide} />
+            ) : view === 'buoy' ? (
+              <BuoyView
+                telemetry={shown}
+                sinceHeard={sinceHeard}
+                held={STILL}
+                fault={fault.kind}
+                onFault={(kind) => setFault({ kind, from: latest.seq })}
+                initialPart={FIRST_PART}
+              />
             ) : (
               <section className="placeholder">
                 <h2>{planned.label}</h2>
