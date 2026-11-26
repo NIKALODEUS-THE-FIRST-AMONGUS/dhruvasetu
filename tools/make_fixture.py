@@ -38,7 +38,7 @@ def main() -> None:
         lon += (1.3 + rng.gauss(0, 0.6)) / (111_320 * math.cos(math.radians(lat)))
         water = -1.20 + 0.04 * math.sin(minutes / 7) + rng.gauss(0, 0.008)
         salt = 34.10 + 0.02 * math.sin(minutes / 11 + 1) + rng.gauss(0, 0.004)
-        height = 2.40 + 0.18 * math.sin(minutes / 4.5) + rng.gauss(0, 0.03)
+        height = 2.30 + 0.10 * math.sin(minutes / 25) + rng.gauss(0, 0.02)
         measured = {
             "type": "report", "buoy": 1, "seq": seq,
             "time": LAST_TIME - (COUNT - 1 - index) * INTERVAL_S,
@@ -47,7 +47,7 @@ def main() -> None:
             "conductivity_ms_cm": seawater.conductivity(salt, water),
             "wave_hs_m": height,
             "wave_tp_s": 9.8 + 0.3 * math.sin(minutes / 6) + rng.gauss(0, 0.05),
-            "noise_low_db": 6.0 + 2.5 * (height - 2.4) + rng.gauss(0, 0.4),
+            "noise_low_db": 6.0 + 2.5 * (height - 2.3) + rng.gauss(0, 0.4),
             "noise_mid_db": 2.0 + rng.gauss(0, 0.4),
             "noise_high_db": -1.0 + rng.gauss(0, 0.4),
             "air_pressure_hpa": 988.0 - 0.03 * minutes + rng.gauss(0, 0.03),
@@ -56,7 +56,7 @@ def main() -> None:
             "hull_temp_c": -3,
             "battery_v": 3.921 - 0.00005 * minutes + rng.gauss(0, 0.0004),
             "energy_j": 0.42 + rng.gauss(0, 0.015),
-            "tilt_deg": 4.5 + 1.5 * (height - 2.4) + rng.gauss(0, 0.3),
+            "tilt_deg": 4.5 + 1.5 * (height - 2.3) + rng.gauss(0, 0.3),
             "ice_timer_pct": 0,
             "state": "NORMAL", "position_valid": True, "time_valid": True, "backlog": 0,
         }

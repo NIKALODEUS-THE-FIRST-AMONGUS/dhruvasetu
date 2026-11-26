@@ -1,11 +1,12 @@
 import { AnimatePresence, motion } from 'motion/react'
 import type { ReactNode } from 'react'
-import { AnimatedNumber, Sparkline } from '../components/basics'
+import { AnimatedNumber, Sparkline, Step } from '../components/basics'
 import { BuoyScene } from '../components/BuoyScene'
 import { Chartlet } from '../components/Chartlet'
 import type { Telemetry } from '../data/store'
 import type { BuoyState, Quantity, Report } from '../data/types'
-import { drift, fixed, gaps, latitude, longitude, series, signed, thousands, trendPerHour, utcDate, utcTime } from '../lib/format'
+import { drift, fixed, gaps, latitude, longitude, series, signed, thousands, utcDate, utcTime } from '../lib/format'
+import { headline, notices, trendText } from '../lib/insight'
 
 const HISTORY = 60
 const rise = {
@@ -24,14 +25,19 @@ interface TileProps {
   /** The small curve never zooms in further than this many units. */
   minSpan: number
   window: string
+  /** True when the headline is talking about this measurement. */
+  marked?: boolean
+  /** Guide marker shown before the name. */
+  step?: ReactNode
   children?: ReactNode
 }
 
-function Tile({ label, qualifier, value, digits, unit, history, minSpan, window, children }: TileProps) {
+function Tile({ label, qualifier, value, digits, unit, history, minSpan, window, marked, step, children }: TileProps) {
   const format = (current: number | null) => fixed(current, digits)
   return (
-    <motion.section className="tile" variants={rise} aria-label={label}>
+    <motion.section className={marked ? 'tile tile--marked' : 'tile'} variants={rise} aria-label={label}>
       <h2 className="label">
+        {step}
         {label}
         {qualifier && <span className="label__note"> · {qualifier}</span>}
       </h2>
@@ -129,13 +135,24 @@ function events(reports: readonly Report[]): BuoyEvent[] {
   return found.sort((a, b) => (b.time ?? 0) - (a.time ?? 0)).slice(0, 4)
 }
 
-export function LiveView({ telemetry }: { telemetry: Telemetry }) {
+interface LiveViewProps {
+  telemetry: Telemetry
+  /** Seconds since the last report reached the page. */
+  sinceHeard: number
+  /** True while the reading guide is open: the numbered markers show. */
+  guide: boolean
+}
+
+export function LiveView({ telemetry, sinceHeard, guide }: LiveViewProps) {
   const { reports, latest, session } = telemetry
   const window = `${Math.round((Math.min(reports.length, HISTORY) * session.interval_s) / 60)} min`
   const history = (key: Quantity) => series(reports, key, HISTORY)
   const aboveFreezing =
     latest.water_temp_c !== null && latest.freezing_point_c !== null ? latest.water_temp_c - latest.freezing_point_c : null
-  const pressureTrend = trendPerHour(reports.slice(-HISTORY), 'air_pressure_hpa')
+  const recent = reports.slice(-HISTORY)
+  const noticed = notices(recent, sinceHeard, session.interval_s)
+  const marked = (place: string) => noticed.some((notice) => notice.place === place)
+  const alarmed = noticed.some((notice) => notice.tone === 'alarm')
   const moved = drift(reports)
   const firstFix = reports.find((report) => report.lat !== null && report.lon !== null)
   const smallWaves = latest.wave_hs_m !== null && latest.wave_hs_m < 0.995
@@ -145,29 +162,15 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
 
   return (
     <div className="live">
-      <section className="state" data-state={latest.state} aria-label="State of the buoy">
-        <div className="state__now" role="status">
+      <section className="state" data-state={latest.state} data-alarm={alarmed || undefined} aria-label="State of the buoy">
+        <div className="state__now">
+          <Step number={2} shown={guide} />
           <StateGlyph state={latest.state} />
           <span className="state__word">{latest.state}</span>
         </div>
-        <div className="fact">
-          <span className="label">Water above freezing</span>
-          <span className="fact__value">{fixed(aboveFreezing, 2)} °C</span>
-        </div>
-        <div className="fact">
-          <span className="label">Wave height</span>
-          <span className="fact__value">{fixed(latest.wave_hs_m, 2)} m</span>
-        </div>
-        <div className="fact">
-          <span className="label">Ice window held{latest.bench_timing ? ' · bench timing' : ''}</span>
-          <span className="fact__value">{fixed(latest.ice_timer_pct, 0)} %</span>
-        </div>
-        <div className="fact">
-          <span className="label">Leak sensor</span>
-          <span className="fact__value" style={latest.leak ? { color: 'var(--alarm)' } : undefined}>
-            {latest.leak ? 'WET' : 'dry'}
-          </span>
-        </div>
+        <p className="state__headline" role="status">
+          {headline(latest, noticed)}
+        </p>
         <div className="state__clock mono">
           {utcDate(latest.time)} · {utcTime(latest.time)} UTC
         </div>
@@ -183,7 +186,12 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
             history={history('water_temp_c')}
             minSpan={0.2}
             window={window}
-          />
+            marked={marked('water_temp_c')}
+            step={<Step number={3} shown={guide} />}
+          >
+            <span>{trendText(recent, 'water_temp_c', 1, '°C')}</span>
+            <span>{fixed(aboveFreezing, 2)} °C above freezing</span>
+          </Tile>
           <Tile
             label="Conductivity"
             qualifier="indicative"
@@ -194,6 +202,7 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
             minSpan={0.3}
             window={window}
           >
+            <span>{trendText(recent, 'conductivity_ms_cm', 1, 'mS/cm')}</span>
             <span>salinity {fixed(latest.salinity, 1)}</span>
           </Tile>
           <Tile
@@ -205,20 +214,19 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
             minSpan={smallWaves ? 5 : 0.6}
             window={window}
           >
-            <span>peak period {fixed(latest.wave_tp_s, 1)} s</span>
+            <span>{trendText(recent, 'wave_hs_m', 1, smallWaves ? 'cm' : 'm', waveFactor)}</span>
+            <span>period {fixed(latest.wave_tp_s, 1)} s</span>
           </Tile>
           <NoiseTile report={latest} />
-          <Tile label="Air pressure" value={latest.air_pressure_hpa} digits={1} unit="hPa" history={history('air_pressure_hpa')} minSpan={1.5} window={window}>
-            {pressureTrend !== null && (
-              <span>
-                {Math.abs(pressureTrend) < 0.3
-                  ? 'steady'
-                  : `${pressureTrend < 0 ? '\u2193 falling' : '\u2191 rising'} ${fixed(Math.abs(pressureTrend), 1)} hPa an hour`}
-              </span>
-            )}
+          <Tile label="Air pressure" value={latest.air_pressure_hpa} digits={1} unit="hPa" history={history('air_pressure_hpa')} minSpan={1.5} window={window} marked={marked('air_pressure_hpa')}>
+            <span>{trendText(recent, 'air_pressure_hpa', 1, 'hPa')}</span>
           </Tile>
-          <Tile label="Air temperature" value={latest.air_temp_c} digits={1} unit="°C" history={history('air_temp_c')} minSpan={1} window={window} />
-          <Tile label="Relative humidity" value={latest.humidity_pct} digits={0} unit="%" history={history('humidity_pct')} minSpan={6} window={window} />
+          <Tile label="Air temperature" value={latest.air_temp_c} digits={1} unit="°C" history={history('air_temp_c')} minSpan={1} window={window}>
+            <span>{trendText(recent, 'air_temp_c', 1, '°C')}</span>
+          </Tile>
+          <Tile label="Relative humidity" value={latest.humidity_pct} digits={0} unit="%" history={history('humidity_pct')} minSpan={6} window={window}>
+            <span>{trendText(recent, 'humidity_pct', 0, '%')}</span>
+          </Tile>
           <motion.section className="tile tile--absent" variants={rise} aria-label="Dissolved oxygen">
             <h2 className="label">Dissolved oxygen</h2>
             <p className="tile__value">Not fitted</p>
@@ -231,7 +239,10 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
         <aside className="side">
           <div className="panel">
             <div className="panel__head">
-              <h2 className="label">Buoy DS-{String(latest.buoy).padStart(2, '0')}</h2>
+              <h2 className="label">
+                <Step number={4} shown={guide} />
+                Buoy DS-{String(latest.buoy).padStart(2, '0')}
+              </h2>
               <span className="panel__note mono">tilt {fixed(latest.tilt_deg, 1)}°</span>
             </div>
             <BuoyScene
@@ -284,13 +295,17 @@ export function LiveView({ telemetry }: { telemetry: Telemetry }) {
       </div>
 
       <footer className="strip">
-        <div className="strip__cell">
-          <span className="label">Battery</span>
+        <div className={marked('hull') ? 'strip__cell strip__cell--marked' : 'strip__cell'}>
+          <span className="label">
+            <Step number={5} shown={guide} />
+            Hull
+          </span>
           <strong>{fixed(latest.battery_v, 2)} V</strong>
           <span>{fixed(latest.energy_j, 2)} J a report</span>
-          <span>{fixed(latest.hull_temp_c, 0)} °C inside the hull</span>
+          <span>{fixed(latest.hull_temp_c, 0)} °C inside</span>
+          <span style={latest.leak ? { color: 'var(--alarm)' } : undefined}>{latest.leak ? 'leak sensor WET' : 'dry'}</span>
         </div>
-        <div className="strip__cell">
+        <div className={marked('link') ? 'strip__cell strip__cell--marked' : 'strip__cell'}>
           <span className="label">Link</span>
           <strong>{fixed(latest.rssi_dbm, 0)} dBm</strong>
           <span>SNR {fixed(latest.snr_db, 1)} dB</span>

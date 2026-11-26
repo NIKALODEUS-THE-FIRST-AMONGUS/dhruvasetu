@@ -13,6 +13,15 @@ export function Mark({ className }: { className?: string }) {
   )
 }
 
+/** A numbered marker of the reading guide. Shown only while the guide is open. */
+export function Step({ number, shown }: { number: number; shown: boolean }) {
+  return shown ? (
+    <span className="step" aria-label={`Step ${number} of the guide`}>
+      {number}
+    </span>
+  ) : null
+}
+
 interface AnimatedNumberProps {
   value: number | null
   format: (value: number | null) => string

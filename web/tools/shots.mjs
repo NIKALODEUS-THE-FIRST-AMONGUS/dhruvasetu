@@ -9,10 +9,11 @@ import { preview } from 'vite'
 const PORT = 4199 // not 4173: start.cmd may be serving the page there
 const base = `http://localhost:${PORT}/`
 const shots = [
-  ['live-laptop-light', 1536, 864, '?still'],
+  ['live-laptop-light', 1536, 864, '?still&theme=light'],
   ['live-laptop-dark', 1536, 864, '?still&theme=dark'],
-  ['live-projector-light', 1920, 1080, '?still'],
-  ['live-phone-light', 390, 844, '?still'],
+  ['live-projector-light', 1920, 1080, '?still&theme=light'],
+  ['live-phone-light', 390, 844, '?still&theme=light'],
+  ['live-laptop-guide', 1536, 864, '?still&theme=light&guide'],
 ]
 
 const server = await preview({ preview: { port: PORT, strictPort: true } })
