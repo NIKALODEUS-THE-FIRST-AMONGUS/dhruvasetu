@@ -1,0 +1,11 @@
+node_modules/
+dist/
+shots/
+__pycache__/
+*.pyc
+.venv/
+*.tsbuildinfo
+*.sqlite
+packets.jsonl
+.DS_Store
+Thumbs.db
