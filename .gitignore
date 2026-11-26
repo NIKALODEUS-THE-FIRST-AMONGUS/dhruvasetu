@@ -9,3 +9,8 @@ __pycache__/
 packets.jsonl
 .DS_Store
 Thumbs.db
+.vercel/
+.wrangler/
+# Variables a hosting tool may copy next to the code. They can hold secrets and are never committed.
+.env
+.env.*

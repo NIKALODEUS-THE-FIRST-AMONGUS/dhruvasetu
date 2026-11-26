@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": null,
+  "buildCommand": null,
+  "outputDirectory": ".",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://dhruvasetu.bikerpork.workers.dev/",
+      "permanent": false
+    }
+  ]
+}

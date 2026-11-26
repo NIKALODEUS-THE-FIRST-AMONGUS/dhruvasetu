@@ -58,7 +58,18 @@ The page is a Cloudflare Worker that only serves the built files (`web/wrangler.
     npx wrangler logout
 
 The login asks for what a deploy needs and no more; the logout leaves no Cloudflare credential on the computer.
+`npm run deploy` lints, tests and builds first, and deploys nothing that fails.
 `web/public/_headers` lets the hosted page load its own files and speak to its database, and to nobody else.
+
+Cloudflare can also deploy by itself on every push to `main`. In its dashboard: Workers & Pages, the Worker
+`dhruvasetu`, Settings, Builds, Connect; choose this repository and branch `main`; root directory `web`; build
+command `npm run ci`; deploy command `npx wrangler deploy`. No token is copied anywhere.
+
+The first Dhruva Setu page was at https://dhruva-setu.vercel.app and described a winch-driven profiler and a
+seal-borne logger, which the project no longer claims. `tools/old-address/` is what is deployed there now: every path
+is sent on to the present page. The earlier deployments stay in the Vercel project and can be put back from its
+dashboard. From that folder: `vercel link --yes --project dhruva-setu`, then `vercel deploy --prod --yes`.
+`vercel link` copies the project's variables into a file `.env.local` there; Git ignores it, and it is best deleted.
 
 ## Check it
 
