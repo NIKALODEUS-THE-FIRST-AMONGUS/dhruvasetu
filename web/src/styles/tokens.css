@@ -1,0 +1,136 @@
+/* Design tokens: "chart table".
+   Paper, ink and the magenta of a nautical chart; one blue for data.
+   Every text colour holds 4.5:1 or better against --paper (checked in tokens.test.ts). */
+
+:root {
+  --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+
+  --value-size: clamp(2.4rem, 3.25vw, 4.2rem);
+  --gap: 1.15rem;
+  --ease: cubic-bezier(0.22, 0.8, 0.26, 1);
+
+  color-scheme: light;
+  --paper: #f4f0e4;
+  --paper-2: #faf7ee;
+  --tint: #d9e7ec;
+  --ink: #16242f;
+  --ink-2: #465661;
+  --ink-3: #56646e;
+  --rule: rgb(22 36 47 / 0.14);
+  --rule-strong: rgb(22 36 47 / 0.36);
+  --sea: #0e5e8c;
+  --magenta: #a21d62;
+  --amber: #8a5200;
+  --alarm: #b42318;
+  --ok: #1e6b4a;
+  --ice: #245fa0;
+  --hull: #fdfbf5;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #0c1821;
+  --paper-2: #101f2a;
+  --tint: #10303f;
+  --ink: #e7eef2;
+  --ink-2: #b3c0c9;
+  --ink-3: #8d9aa5;
+  --rule: rgb(231 238 242 / 0.14);
+  --rule-strong: rgb(231 238 242 / 0.34);
+  --sea: #6ec1ea;
+  --magenta: #f28abf;
+  --amber: #f0b429;
+  --alarm: #ff8a7a;
+  --ok: #74d4a7;
+  --ice: #9ccbf5;
+  --hull: #1a2c39;
+}
+
+html {
+  font-size: clamp(14px, 0.52vw + 7px, 18px);
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1rem/1.45 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.35s var(--ease), color 0.35s var(--ease);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd,
+ol,
+ul {
+  margin: 0;
+  padding: 0;
+}
+
+ol,
+ul {
+  list-style: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--magenta);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.label {
+  font: 500 0.72rem/1.25 var(--font-sans);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.tag {
+  display: inline-block;
+  font: 600 0.66rem/1 var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.22em 0.45em 0.2em;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
