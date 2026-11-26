@@ -2,6 +2,8 @@
 
 Telemetry portal of the Dhruva Setu ocean observation buoy. Team Dhruva_1, Smart India Hackathon 2026, PS 26065.
 
+The page: https://dhruvasetu.bikerpork.workers.dev
+
 The data on the page is made up until hardware runs. The page says so on every view.
 
 ## What is here
@@ -35,13 +37,28 @@ the browser. Close its window to stop the page.
 The reports are kept in a Supabase project; nothing runs as a server on a team computer. To set one up, paste
 `supabase/migrations/20261126160000_reports.sql` into the project's SQL editor and run it. The file checks itself and
 ends with a small table that says what it installed. Then put the project's address and its publishable key into
-`web/src/data/backend.ts`.
+`web/src/data/backend.json`, and the address into `web/public/_headers`.
+
+`python tools/check_stream.py` asks the database for its newest report, as a page does, and fails when it is older
+than a minute and a half. GitHub runs it four times a day.
 
 - A report comes in through `ingest`: 50 bytes as 100 hex characters. It is stored only if its tag was made with a key
   the database holds, and the same bytes are stored once. Anyone may read; nobody may write.
 - The key that verifies a report decides its label: `live` for a real buoy, `simulated` for the made-up one, whose key
   is made inside the database and never leaves it.
 - Only the publishable key belongs in this repository. A secret key, the database password or a buoy's key never do.
+
+## Put it online
+
+The page is a Cloudflare Worker that only serves the built files (`web/wrangler.jsonc`).
+
+    cd web
+    npx wrangler login --scopes account:read user:read workers_scripts:write
+    npm run deploy
+    npx wrangler logout
+
+The login asks for what a deploy needs and no more; the logout leaves no Cloudflare credential on the computer.
+`web/public/_headers` lets the hosted page load its own files and speak to its database, and to nobody else.
 
 ## Check it
 
