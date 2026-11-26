@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import sessionFile from '../fixtures/session.json'
+import project from './backend.json'
 import { follow, loraAirtimeMs, toSession } from './hosted'
 import type { StreamAnswer, StreamItem, Transport } from './hosted'
 import { createStore } from './store'
@@ -146,6 +148,16 @@ describe('following the database', () => {
     const asked = state.asked.length
     await vi.advanceTimersByTimeAsync(120_000)
     expect(state.asked).toHaveLength(asked)
+  })
+})
+
+describe('the address of the database', () => {
+  it('is the one the headers of the hosted page allow, and no secret key is written down', () => {
+    const headers = readFileSync(new URL('../../public/_headers', import.meta.url), 'utf8')
+    const host = new URL(project.url).host
+    expect(headers).toContain(`https://${host}`)
+    expect(headers).toContain(`wss://${host}`)
+    expect(project.key.startsWith('sb_publishable_')).toBe(true)
   })
 })
 

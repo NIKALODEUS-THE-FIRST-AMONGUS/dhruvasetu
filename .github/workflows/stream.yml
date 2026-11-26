@@ -1,0 +1,21 @@
+name: stream
+
+# Four times a day, and by hand: is the hosted stream alive? See tools/check_stream.py.
+on:
+  schedule:
+    - cron: '7 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  alive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: The newest report in the database is fresh
+        run: python tools/check_stream.py

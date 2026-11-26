@@ -63,28 +63,28 @@ const SPARK_HEIGHT = 44
 const SPARK_POINTS = 60
 const SPARK_PAD = 5
 
-function toFixedCount(values: readonly number[]): number[] {
-  const tail = values.slice(-SPARK_POINTS)
-  const padding = Array<number>(SPARK_POINTS - tail.length).fill(tail[0] ?? 0)
-  return [...padding, ...tail]
-}
-
-/** A small curve of recent values. It always has the same number of points, so one
- *  curve can ease into the next when a report arrives. */
+/** A small curve of recent values. The width is always sixty reports: with fewer, the curve
+ *  starts further right and the room before it stays empty, because nothing was measured
+ *  there. The path keeps the same number of points all the same, so one curve can ease into
+ *  the next when a report arrives: the points it has too many of lie on its first value. */
 export function Sparkline({ values, label, minSpan = 0 }: { values: readonly number[]; label: string; minSpan?: number }) {
   if (values.length < 2) {
     return <svg className="spark" role="img" aria-label={`${label}: not enough reports yet`} />
   }
-  const data = toFixedCount(values)
+  const tail = values.slice(-SPARK_POINTS)
+  const empty = SPARK_POINTS - tail.length
   // Never zoom in further than `minSpan`: sensor noise must not look like weather.
-  const least = Math.min(...data)
-  const most = Math.max(...data)
+  const least = Math.min(...tail)
+  const most = Math.max(...tail)
   const span = Math.max(most - least, minSpan) || 1
   const low = (least + most) / 2 - span / 2
-  const x = (index: number) => (index / (SPARK_POINTS - 1)) * SPARK_WIDTH
+  const x = (index: number) => (Math.max(index, empty) / (SPARK_POINTS - 1)) * SPARK_WIDTH
   const y = (value: number) => SPARK_HEIGHT - SPARK_PAD - ((value - low) / span) * (SPARK_HEIGHT - 2 * SPARK_PAD)
-  const line = data.map((value, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)} ${y(value).toFixed(1)}`).join(' ')
-  const dot = `M${SPARK_WIDTH} ${y(data[SPARK_POINTS - 1]!).toFixed(1)} h0.01`
+  const line = Array.from({ length: SPARK_POINTS }, (_, index) => {
+    const value = tail[Math.max(index - empty, 0)]!
+    return `${index ? 'L' : 'M'}${x(index).toFixed(1)} ${y(value).toFixed(1)}`
+  }).join(' ')
+  const dot = `M${SPARK_WIDTH} ${y(tail[tail.length - 1]!).toFixed(1)} h0.01`
   const ease = { duration: 0.6, ease: [0.22, 0.8, 0.26, 1] as const }
   return (
     <svg className="spark" viewBox={`0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}`} preserveAspectRatio="none" role="img" aria-label={label}>

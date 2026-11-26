@@ -1,0 +1,9 @@
+{
+  // The page on Cloudflare: a Worker that serves the built files and runs no code of its own.
+  // Deployed with `npx wrangler deploy` from this folder, after `npm run build`.
+  "name": "dhruvasetu",
+  "compatibility_date": "2026-11-26",
+  "assets": {
+    "directory": "./dist"
+  }
+}
