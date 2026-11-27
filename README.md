@@ -65,11 +65,18 @@ Cloudflare can also deploy by itself on every push to `main`. In its dashboard: 
 `dhruvasetu`, Settings, Builds, Connect; choose this repository and branch `main`; root directory `web`; build
 command `npm run ci`; deploy command `npx wrangler deploy`. No token is copied anywhere.
 
-The first Dhruva Setu page was at https://dhruva-setu.vercel.app and described a winch-driven profiler and a
-seal-borne logger, which the project no longer claims. `tools/old-address/` is what is deployed there now: every path
-is sent on to the present page. The earlier deployments stay in the Vercel project and can be put back from its
-dashboard. From that folder: `vercel link --yes --project dhruva-setu`, then `vercel deploy --prod --yes`.
-`vercel link` copies the project's variables into a file `.env.local` there; Git ignores it, and it is best deleted.
+The first Dhruva Setu page is at https://dhruva-setu.vercel.app: the simulator made for the team's Smart India
+Hackathon 2026 entry. It shows the first concept, with a winch-driven profiler and a seal-borne logger, and it stays
+as it is until the result is declared. It is separate from this repository, which is the telemetry portal of the
+present design: a buoy with fixed sensors, with the winch as an optional module.
+
+From 26 to 27 Nov 2026 that address sent its visitors on to the portal. `tools/old-address/` is that redirect; it is
+kept here and not deployed. The simulator was put back with `vercel rollback <deployment>` from that folder, which
+returns the address to an earlier deployment. After a rollback Vercel no longer moves the address to new deployments
+by itself: the redirect would come back with `vercel promote <deployment>`, or from the project's dashboard (not
+tried). The folder is linked to the Vercel project `dhruva-setu` by its `.vercel` folder, which Git ignores; linking
+again with `vercel link` copies the project's variables into a file `.env.local`, which is best deleted. Log out
+afterwards: `vercel logout`.
 
 ## Check it
 
